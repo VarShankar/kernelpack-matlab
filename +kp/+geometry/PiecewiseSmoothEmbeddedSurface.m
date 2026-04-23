@@ -105,8 +105,12 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
 
             [obj.Xb, obj.Nrmls, obj.segment_map, obj.corner_flags] = ...
                 obj.deduplicateBoundary(Xb_s, Nrmls_s, obj.segment_map, obj.corner_flags, 0.2 * radius);
-            [obj.Xb_uniform, obj.Nrmls_uniform, ~, ~] = ...
+            [obj.Xb, obj.Nrmls, obj.segment_map, obj.corner_flags] = ...
+                obj.enforceMinimumSpacing(obj.Xb, obj.Nrmls, obj.segment_map, obj.corner_flags, radius);
+            [obj.Xb_uniform, obj.Nrmls_uniform, uniformSegmentMap, uniformCornerFlags] = ...
                 obj.deduplicateBoundary(Xb_su, Nrmls_su, uniformSegmentMap, uniformCornerFlags, 0.2 * radius);
+            [obj.Xb_uniform, obj.Nrmls_uniform, ~, ~] = ...
+                obj.enforceMinimumSpacing(obj.Xb_uniform, obj.Nrmls_uniform, uniformSegmentMap, uniformCornerFlags, radius);
 
             obj.segment_map = obj.segment_map(:);
             obj.corner_flags = obj.corner_flags(:);
@@ -250,6 +254,48 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
             Nout = kp.geometry.normalizeRows(Nkeep(1:outCount, :));
             segOut = segKeep(1:outCount);
             cornerOut = cornerKeep(1:outCount);
+        end
+
+        function [Xout, Nout, segOut, cornerOut] = enforceMinimumSpacing(~, X, N, segMap, cornerFlags, radius)
+            n = size(X, 1);
+            if n == 0
+                Xout = X;
+                Nout = N;
+                segOut = segMap;
+                cornerOut = cornerFlags;
+                return;
+            end
+
+            D = kp.geometry.distanceMatrix(X, X);
+            keep = true(n, 1);
+            cornerMask = cornerFlags(:) ~= 0;
+            order = [(find(cornerMask)).' (find(~cornerMask)).'];
+            spacingTol = radius * (1 - 1e-12);
+
+            for idx = order
+                if ~keep(idx)
+                    continue;
+                end
+                nbrs = find((D(idx, :) < spacingTol) & (D(idx, :) > 0));
+                if isempty(nbrs)
+                    continue;
+                end
+                for j = nbrs
+                    if ~keep(j)
+                        continue;
+                    end
+                    if cornerMask(j) && ~cornerMask(idx)
+                        keep(idx) = false;
+                        break;
+                    end
+                    keep(j) = false;
+                end
+            end
+
+            Xout = X(keep, :);
+            Nout = N(keep, :);
+            segOut = segMap(keep);
+            cornerOut = cornerFlags(keep);
         end
 
         function NrmlsOut = smoothNormals(~, X, NrmlsIn, neighborhood)
