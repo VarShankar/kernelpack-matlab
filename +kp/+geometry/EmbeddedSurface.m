@@ -46,7 +46,13 @@ classdef EmbeddedSurface < handle
             obj.uniform_sample_sites = sampleSites;
         end
 
-        function buildClosedGeometricModelPS(obj, dim, rad, Nb, Ne, ~, method, supersample_fac, ~, ~)
+        function buildClosedGeometricModelPS(obj, dim, rad, Nb, Ne, eval_mode, method, supersample_fac, mode, chart_mode)
+            if nargin < 6 || isempty(eval_mode), eval_mode = 'eval + eval_first_ders'; end
+            if nargin < 7 || isempty(method), method = 1; end
+            if nargin < 8 || isempty(supersample_fac), supersample_fac = 2; end
+            if nargin < 9 || isempty(mode), mode = 2; end
+            if nargin < 10 || isempty(chart_mode), chart_mode = 1; end
+            unused_opts = {eval_mode, mode, chart_mode}; %#ok<NASGU>
             obj.sep_rad = rad;
             obj.Nd = min(Nb, size(obj.data_sites, 1));
             obj.surf_dim = dim - 1;
@@ -153,7 +159,13 @@ classdef EmbeddedSurface < handle
             obj.buildUniformTree();
         end
 
-        function buildGeometricModelPS(obj, dim, rad, Nb, Ne, ~, method, supersample_fac, ~, ~)
+        function buildGeometricModelPS(obj, dim, rad, Nb, Ne, eval_mode, method, supersample_fac, mode, chart_mode)
+            if nargin < 6 || isempty(eval_mode), eval_mode = 'eval + eval_first_ders'; end
+            if nargin < 7 || isempty(method), method = 1; end
+            if nargin < 8 || isempty(supersample_fac), supersample_fac = 2; end
+            if nargin < 9 || isempty(mode), mode = 2; end
+            if nargin < 10 || isempty(chart_mode), chart_mode = 1; end
+            unused_opts = {eval_mode, mode, chart_mode}; %#ok<NASGU>
             obj.sep_rad = rad;
             obj.Nd = min(Nb, size(obj.data_sites, 1));
             obj.surf_dim = dim - 1;

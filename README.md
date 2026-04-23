@@ -59,8 +59,7 @@ x = [cos(t), 0.7*sin(t)];
 
 surface = kp.geometry.EmbeddedSurface();
 surface.setDataSites(x);
-surface.buildClosedGeometricModelPS(2, 0.05, size(x,1), 120, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+surface.buildClosedGeometricModelPS(2, 0.05, size(x,1), 120);
 surface.buildLevelSetFromGeometricModel([]);
 
 xb = surface.getSampleSites();
@@ -76,8 +75,7 @@ x = [u, u.^2];
 
 segment = kp.geometry.EmbeddedSurface();
 segment.setDataSites(x);
-segment.buildGeometricModelPS(2, 0.05, size(x,1), 80, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+segment.buildGeometricModelPS(2, 0.05, size(x,1), 80);
 
 xb = segment.getSampleSites();
 nrmls = segment.getNrmls();
@@ -111,8 +109,7 @@ pts = X .* r;
 
 surface = kp.geometry.EmbeddedSurface();
 surface.setDataSites(pts);
-surface.buildClosedGeometricModelPS(3, 0.2, size(pts,1), 160, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+surface.buildClosedGeometricModelPS(3, 0.2, size(pts,1), 160);
 surface.buildLevelSetFromGeometricModel([]);
 
 xb = surface.getSampleSites();

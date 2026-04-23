@@ -8,8 +8,7 @@ x = [cos(t), 0.7 * sin(t)];
 
 surf2 = kp.geometry.EmbeddedSurface();
 surf2.setDataSites(x);
-surf2.buildClosedGeometricModelPS(2, 0.05, size(x, 1), 120, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+surf2.buildClosedGeometricModelPS(2, 0.05, size(x, 1), 120);
 surf2.buildLevelSetFromGeometricModel([]);
 
 fprintf('2D sample sites: %d\n', surf2.getN());
@@ -22,8 +21,7 @@ pts = X .* r;
 
 surf3 = kp.geometry.EmbeddedSurface();
 surf3.setDataSites(pts);
-surf3.buildClosedGeometricModelPS(3, 0.2, size(pts, 1), 160, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+surf3.buildClosedGeometricModelPS(3, 0.2, size(pts, 1), 160);
 surf3.buildLevelSetFromGeometricModel([]);
 
 fprintf('3D sample sites: %d\n', surf3.getN());
@@ -41,4 +39,3 @@ piece3.buildLevelSet();
 
 fprintf('Piecewise 3D boundary nodes: %d\n', size(piece3.getBdryNodes(), 1));
 fprintf('Piecewise 3D corner flags: %d\n', nnz(piece3.getCornerFlags()));
-

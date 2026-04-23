@@ -6,8 +6,7 @@ t(end) = [];
 x = [cos(t), 0.7 * sin(t)];
 s2 = kp.geometry.EmbeddedSurface();
 s2.setDataSites(x);
-s2.buildClosedGeometricModelPS(2, 0.05, size(x, 1), 120, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+s2.buildClosedGeometricModelPS(2, 0.05, size(x, 1), 120);
 s2.buildLevelSetFromGeometricModel([]);
 xb2 = s2.getSampleSites();
 nr2 = s2.getNrmls();
@@ -20,8 +19,7 @@ r = 1 + 0.15 * cos(3 * uv(:, 1)) .* cos(2 * uv(:, 2));
 pts = X .* r;
 s3 = kp.geometry.EmbeddedSurface();
 s3.setDataSites(pts);
-s3.buildClosedGeometricModelPS(3, 0.18, size(pts, 1), 180, ...
-    'eval + eval_first_ders', 1, 2, 2, 1);
+s3.buildClosedGeometricModelPS(3, 0.18, size(pts, 1), 180);
 s3.buildLevelSetFromGeometricModel([]);
 assert(size(s3.getSampleSites(), 2) == 3, '3D sample sites should be 3D.');
 assert(s3.getN() > 20, '3D WSE thinning should keep a reasonable sample set.');
