@@ -66,9 +66,7 @@ classdef RBFLevelSet < handle
         end
 
         function val = Evaluate(obj, xe)
-            R = kp.geometry.distanceMatrix(xe, obj.Centers);
-            val = kp.geometry.phsKernel(R, obj.m_spline_degree) * obj.Weights + ...
-                [ones(size(xe, 1), 1), xe] * obj.PolyCoeffs - obj.mean_potential;
+            val = kp.geometry.RBFLevelSet.evaluateModel(obj.getEvaluationModel(), xe);
         end
 
         function grad = EvaluateGradient(obj, xe)
@@ -153,6 +151,15 @@ classdef RBFLevelSet < handle
             end
             flags = uint32(obj.Evaluate(xe) <= -0.5 * tol);
         end
+
+        function model = getEvaluationModel(obj)
+            model = struct( ...
+                'Centers', obj.Centers, ...
+                'Weights', obj.Weights, ...
+                'PolyCoeffs', obj.PolyCoeffs, ...
+                'm_spline_degree', obj.m_spline_degree, ...
+                'mean_potential', obj.mean_potential);
+        end
     end
 
     methods (Access = private)
@@ -180,6 +187,14 @@ classdef RBFLevelSet < handle
                     options.(name) = defaults.(name);
                 end
             end
+        end
+    end
+
+    methods (Static)
+        function val = evaluateModel(model, xe)
+            R = kp.geometry.distanceMatrix(xe, model.Centers);
+            val = kp.geometry.phsKernel(R, model.m_spline_degree) * model.Weights + ...
+                [ones(size(xe, 1), 1), xe] * model.PolyCoeffs - model.mean_potential;
         end
     end
 end

@@ -24,3 +24,8 @@ generator = kp.nodes.DomainNodeGenerator();
 generator.generateInteriorNodesFromGeometry(surface, 0.08, 'Seed', 17, 'StripCount', 5);
 fprintf('Clipped interior nodes: %d from raw box nodes: %d\n', ...
     size(generator.getInteriorNodes(), 1), size(generator.getRawPoissonInteriorNodes(), 1));
+
+fprintf('Running explicit parallel clipping example...\n');
+[xin, ~, ~] = kp.nodes.clipPointsByGeometry(generator.getRawPoissonInteriorNodes(), ...
+    surface, 'UseParallel', true, 'ChunkSize', 2000, 'MinParallelPoints', 1000);
+fprintf('Parallel-clipped interior nodes: %d\n', size(xin, 1));

@@ -49,6 +49,7 @@ and early 3D cases:
 - fixed-radius Poisson disk sampling on axis-aligned boxes in any dimension
 - level-set clipping of box Poisson clouds against `EmbeddedSurface` and
   `PiecewiseSmoothEmbeddedSurface`
+- chunked `parfor` evaluation for large geometry-clipping jobs
 
 ## Basic use
 
@@ -59,7 +60,7 @@ The repository also includes:
 - [`tests/geometry_checks.m`](tests/geometry_checks.m) for lightweight geometry
   checks on normals, assembled boundary clouds, and piecewise seam handling
 - [`examples/nodes_examples.m`](examples/nodes_examples.m) for seeded box
-  Poisson node generation examples
+  Poisson node generation examples, including parallel clipping
 - [`tests/nodes_checks.m`](tests/nodes_checks.m) for basic node-generation
   determinism and spacing checks
 
@@ -93,6 +94,14 @@ generator.generateInteriorNodesFromGeometry(surface, 0.08, ...
 
 interior_nodes = generator.getInteriorNodes();
 raw_box_nodes = generator.getRawPoissonInteriorNodes();
+```
+
+For larger clouds, clipping can also evaluate the level set in parallel:
+
+```matlab
+[interior_nodes, keep_mask, phi] = kp.nodes.clipPointsByGeometry( ...
+    raw_box_nodes, surface, 'UseParallel', true, ...
+    'ChunkSize', 5000, 'MinParallelPoints', 20000);
 ```
 
 ### Smooth closed curve
