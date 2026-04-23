@@ -7,6 +7,8 @@ function [Xkeep, keepMask, phi] = clipPointsByGeometry(X, geometry, varargin)
     parser.addParameter('Keep', 'inside', @(x) any(strcmpi(x, {'inside', 'outside'})));
     parser.addParameter('Tolerance', 0, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite'}));
     parser.addParameter('BoundaryClearance', 0, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'}));
+    parser.addParameter('MinSignedDistance', -inf, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite'}));
+    parser.addParameter('MaxSignedDistance', inf, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite'}));
     parser.addParameter('AutoBuildLevelSet', true, @(x) islogical(x) || isnumeric(x));
     parser.addParameter('UseParallel', true, @(x) islogical(x) || isnumeric(x));
     parser.addParameter('ChunkSize', 5000, @(x) validateattributes(x, {'numeric'}, {'scalar', 'integer', '>=', 1}));
@@ -25,6 +27,8 @@ function [Xkeep, keepMask, phi] = clipPointsByGeometry(X, geometry, varargin)
         otherwise
             error('kp:nodes:BadKeepMode', 'Keep must be ''inside'' or ''outside''.');
     end
+
+    keepMask = keepMask & (phi >= opts.MinSignedDistance) & (phi <= opts.MaxSignedDistance);
 
     Xkeep = X(keepMask, :);
 end

@@ -50,6 +50,7 @@ and early 3D cases:
 - level-set clipping of box Poisson clouds against `EmbeddedSurface` and
   `PiecewiseSmoothEmbeddedSurface`
 - chunked `parfor` evaluation for large geometry-clipping jobs
+- outer refinement bands near the boundary using a smaller local spacing
 
 ## Basic use
 
@@ -98,6 +99,20 @@ raw_box_nodes = generator.getRawPoissonInteriorNodes();
 
 The interior generation path keeps a clearance band of width `h` from the
 boundary, so nodes within one local spacing of the level set are removed.
+
+Near-boundary outer refinement is also available. In that mode the coarse
+interior cloud stays outside the refinement band, a finer cloud is generated
+inside the band, and the level-set clearance is based on the smallest radius
+being used.
+
+```matlab
+generator = kp.nodes.DomainNodeGenerator();
+generator.generateInteriorNodesFromGeometry(surface, 0.08, ...
+    'Seed', 17, 'StripCount', 5, ...
+    'DoOuterRefinement', true, ...
+    'OuterFractionOfh', 0.5, ...
+    'OuterRefinementZoneSizeAsMultipleOfh', 2.0);
+```
 
 For larger clouds, clipping can also evaluate the level set in parallel:
 

@@ -45,6 +45,18 @@ assert(size(int2, 1) < size(raw2, 1), 'Geometry clipping should remove points ou
 phi2 = surface.getLevelSet().Evaluate(int2);
 assert(all(phi2 <= -0.08 + 1e-10), 'Interior nodes should stay at least h away from the boundary.');
 
+gen3 = kp.nodes.DomainNodeGenerator();
+gen3.generateInteriorNodesFromGeometry(surface, 0.08, ...
+    'Seed', 29, 'StripCount', 5, ...
+    'DoOuterRefinement', true, ...
+    'OuterFractionOfh', 0.5, ...
+    'OuterRefinementZoneSizeAsMultipleOfh', 2.0);
+int3 = gen3.getInteriorNodes();
+phi3 = surface.getLevelSet().Evaluate(int3);
+assert(any(phi3 > -0.16 + 1e-10), 'Outer refinement should populate the near-boundary band.');
+assert(all(phi3 <= -0.04 + 1e-10), 'Clipping should use the smallest active radius in the refined node set.');
+assert(size(int3, 1) >= size(int2, 1), 'Outer refinement should not reduce the interior node count.');
+
 seg1 = [linspace(0,1,25).', zeros(25,1)];
 seg2 = [ones(25,1), linspace(0,1,25).'];
 seg3 = [linspace(1,0,25).', ones(25,1)];
