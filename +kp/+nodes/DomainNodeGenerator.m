@@ -3,20 +3,28 @@ classdef DomainNodeGenerator < handle
 
     properties (SetAccess = private)
         Xi double = zeros(0, 0)
+        Xb double = zeros(0, 0)
+        Xg double = zeros(0, 0)
+        Nrmls double = zeros(0, 0)
         Xi_orig double = zeros(0, 0)
         Xi_pds_raw double = zeros(0, 0)
         s_dim (1,1) double = 0
         last_info struct = struct()
+        descriptor kp.domain.DomainDescriptor = kp.domain.DomainDescriptor()
     end
 
     methods
         function generatePoissonNodes(obj, radius, x_min, x_max, varargin)
             [X, info] = kp.nodes.generatePoissonNodesInBox(radius, x_min, x_max, varargin{:});
             obj.Xi = X;
+            obj.Xb = zeros(0, size(X, 2));
+            obj.Xg = zeros(0, size(X, 2));
+            obj.Nrmls = zeros(0, size(X, 2));
             obj.Xi_orig = X;
             obj.Xi_pds_raw = X;
             obj.s_dim = size(X, 2);
             obj.last_info = info;
+            obj.descriptor = kp.domain.DomainDescriptor();
         end
 
         function generateInteriorNodesFromGeometry(obj, geometry, radius, varargin)
@@ -93,12 +101,53 @@ classdef DomainNodeGenerator < handle
             obj.last_info.clip_levelset_values = phi(mask);
         end
 
+        function descriptor = buildDomainDescriptorFromGeometry(obj, geometry, radius, varargin)
+            obj.generateInteriorNodesFromGeometry(geometry, radius, varargin{:});
+            [boundaryNodes, boundaryNormals, boundaryLevelSet] = buildBoundaryState(geometry);
+            minRadiusUsed = radius;
+            if isfield(obj.last_info, 'min_active_radius')
+                minRadiusUsed = obj.last_info.min_active_radius;
+            end
+            ghostNodes = boundaryNodes + 0.5 * minRadiusUsed * boundaryNormals;
+
+            descriptor = kp.domain.DomainDescriptor();
+            descriptor.setNodes(obj.Xi, boundaryNodes, ghostNodes);
+            descriptor.setNormals(boundaryNormals);
+            descriptor.setOuterLevelSet(boundaryLevelSet);
+            descriptor.setBoundaryLevelSets({boundaryLevelSet});
+            descriptor.buildStructs();
+
+            obj.Xb = boundaryNodes;
+            obj.Xg = ghostNodes;
+            obj.Nrmls = boundaryNormals;
+            obj.descriptor = descriptor;
+            obj.last_info.boundary_node_count = size(boundaryNodes, 1);
+            obj.last_info.ghost_node_count = size(ghostNodes, 1);
+            obj.last_info.min_active_radius = minRadiusUsed;
+        end
+
         function out = getInteriorNodes(obj)
             out = obj.Xi;
         end
 
+        function out = getBdryNodes(obj)
+            out = obj.Xb;
+        end
+
+        function out = getGhostNodes(obj)
+            out = obj.Xg;
+        end
+
+        function out = getNrmls(obj)
+            out = obj.Nrmls;
+        end
+
         function out = getRawPoissonInteriorNodes(obj)
             out = obj.Xi_pds_raw;
+        end
+
+        function out = getDomainDescriptor(obj)
+            out = obj.descriptor;
         end
     end
 end
@@ -109,5 +158,31 @@ function args = namedArgsToCell(s)
     for k = 1:numel(names)
         args{2 * k - 1} = names{k};
         args{2 * k} = s.(names{k});
+    end
+end
+
+function [Xb, Nrmls, levelSet] = buildBoundaryState(geometry)
+    if ismethod(geometry, 'getUniformBdryNodes')
+        Xb = geometry.getUniformBdryNodes();
+        Nrmls = geometry.getUniformBdryNrmls();
+    elseif ismethod(geometry, 'getUniformSampleSites')
+        Xb = geometry.getUniformSampleSites();
+        Nrmls = geometry.getUniformNrmls();
+    elseif ismethod(geometry, 'getBdryNodes')
+        Xb = geometry.getBdryNodes();
+        Nrmls = geometry.getBdryNrmls();
+    else
+        Xb = geometry.getSampleSites();
+        Nrmls = geometry.getNrmls();
+    end
+
+    levelSet = geometry.getLevelSet();
+    if isempty(levelSet) || ~isa(levelSet, 'kp.geometry.RBFLevelSet') || levelSet.n == 0
+        if ismethod(geometry, 'buildLevelSetFromGeometricModel')
+            geometry.buildLevelSetFromGeometricModel([]);
+        else
+            geometry.buildLevelSet();
+        end
+        levelSet = geometry.getLevelSet();
     end
 end

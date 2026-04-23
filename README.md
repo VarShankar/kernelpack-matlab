@@ -16,10 +16,11 @@ KernelPack:
 - `EmbeddedSurface`
 - `PiecewiseSmoothEmbeddedSurface`
 - `RBFLevelSet`
+- `DomainDescriptor`
 - `DomainNodeGenerator`
 
 These classes live in [`+kp/+geometry`](+kp/+geometry) and
-[`+kp/+nodes`](+kp/+nodes).
+[`+kp/+nodes`](+kp/+nodes) together with [`+kp/+domain`](+kp/+domain).
 
 ## What is here now
 
@@ -33,9 +34,11 @@ The current code establishes a KernelPack-shaped starting point for geometry:
   and level-set representation for a piecewise-smooth boundary.
 - `RBFLevelSet` provides an implicit boundary representation with evaluation,
   gradient evaluation, inside-outside tests, and Newton projection routines.
+- `DomainDescriptor` stores the pared-down domain state: interior nodes,
+  boundary nodes, ghost nodes, boundary normals, and simple tree placeholders.
 - `DomainNodeGenerator` provides seeded fixed-radius Poisson disk sampling on
-  axis-aligned boxes, plus geometry-aware clipping from raw box clouds to
-  interior node sets.
+  axis-aligned boxes, geometry-aware clipping from raw box clouds to interior
+  node sets, and assembly into a `DomainDescriptor`.
 
 At the moment, the implemented geometric-model construction path is the 2D
 and early 3D cases:
@@ -95,6 +98,8 @@ generator.generateInteriorNodesFromGeometry(surface, 0.08, ...
 
 interior_nodes = generator.getInteriorNodes();
 raw_box_nodes = generator.getRawPoissonInteriorNodes();
+descriptor = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
+    'Seed', 17, 'StripCount', 5);
 ```
 
 The interior generation path keeps a clearance band of width `h` from the
