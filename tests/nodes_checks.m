@@ -43,7 +43,7 @@ raw2 = gen2.getRawPoissonInteriorNodes();
 int2 = gen2.getInteriorNodes();
 assert(size(int2, 1) < size(raw2, 1), 'Geometry clipping should remove points outside the surface bounding box fill.');
 phi2 = surface.getLevelSet().Evaluate(int2);
-assert(all(phi2 <= 1e-10), 'Interior nodes should lie on the negative side of the level set.');
+assert(all(phi2 <= -0.08 + 1e-10), 'Interior nodes should stay at least h away from the boundary.');
 
 seg1 = [linspace(0,1,25).', zeros(25,1)];
 seg2 = [ones(25,1), linspace(0,1,25).'];

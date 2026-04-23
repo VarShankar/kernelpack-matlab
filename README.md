@@ -96,12 +96,16 @@ interior_nodes = generator.getInteriorNodes();
 raw_box_nodes = generator.getRawPoissonInteriorNodes();
 ```
 
+The interior generation path keeps a clearance band of width `h` from the
+boundary, so nodes within one local spacing of the level set are removed.
+
 For larger clouds, clipping can also evaluate the level set in parallel:
 
 ```matlab
 [interior_nodes, keep_mask, phi] = kp.nodes.clipPointsByGeometry( ...
     raw_box_nodes, surface, 'UseParallel', true, ...
-    'ChunkSize', 5000, 'MinParallelPoints', 20000);
+    'ChunkSize', 5000, 'MinParallelPoints', 20000, ...
+    'BoundaryClearance', 0.08);
 ```
 
 ### Smooth closed curve

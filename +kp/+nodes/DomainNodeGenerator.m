@@ -22,7 +22,7 @@ classdef DomainNodeGenerator < handle
         function generateInteriorNodesFromGeometry(obj, geometry, radius, varargin)
             [x_min, x_max] = kp.nodes.boundingBoxExtents(geometry, true);
             obj.generatePoissonNodes(radius, x_min, x_max, varargin{:});
-            obj.clipToGeometry(geometry, 'Keep', 'inside');
+            obj.clipToGeometry(geometry, 'Keep', 'inside', 'BoundaryClearance', radius);
         end
 
         function [X, mask, phi] = clipToGeometry(obj, geometry, varargin)

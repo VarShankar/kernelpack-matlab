@@ -6,6 +6,7 @@ function [Xkeep, keepMask, phi] = clipPointsByGeometry(X, geometry, varargin)
     parser.addRequired('geometry');
     parser.addParameter('Keep', 'inside', @(x) any(strcmpi(x, {'inside', 'outside'})));
     parser.addParameter('Tolerance', 0, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite'}));
+    parser.addParameter('BoundaryClearance', 0, @(x) validateattributes(x, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'}));
     parser.addParameter('AutoBuildLevelSet', true, @(x) islogical(x) || isnumeric(x));
     parser.addParameter('UseParallel', true, @(x) islogical(x) || isnumeric(x));
     parser.addParameter('ChunkSize', 5000, @(x) validateattributes(x, {'numeric'}, {'scalar', 'integer', '>=', 1}));
@@ -18,9 +19,9 @@ function [Xkeep, keepMask, phi] = clipPointsByGeometry(X, geometry, varargin)
 
     switch lower(opts.Keep)
         case 'inside'
-            keepMask = phi <= opts.Tolerance;
+            keepMask = phi <= (opts.Tolerance - opts.BoundaryClearance);
         case 'outside'
-            keepMask = phi >= -opts.Tolerance;
+            keepMask = phi >= (opts.BoundaryClearance - opts.Tolerance);
         otherwise
             error('kp:nodes:BadKeepMode', 'Keep must be ''inside'' or ''outside''.');
     end
