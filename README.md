@@ -84,6 +84,8 @@ Checks:
 
 ### Smooth 2D geometry
 
+![Smooth 2D geometry](docs/images/readme_smooth_2d_geometry.png)
+
 ```matlab
 % Define a smooth closed planar boundary.
 t = linspace(0, 2*pi, 50).';
@@ -99,11 +101,49 @@ surface.buildLevelSetFromGeometricModel([]);
 % Extract boundary samples and normals from the fitted representation.
 xb = surface.getSampleSites();
 nrmls = surface.getNrmls();
+
+% Plot the geometry ingredients shown above and save the figure.
+fig = figure('Color', 'w', 'Position', [100 100 1100 360]);
+tiledlayout(1, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+nexttile;
+plot(curve(:, 1), curve(:, 2), 'ko', 'MarkerFaceColor', [0.15 0.15 0.15], 'MarkerSize', 5);
+axis equal;
+grid on;
+title('Data Sites');
+
+nexttile;
+plot(xb(:, 1), xb(:, 2), 'b.', 'MarkerSize', 12);
+axis equal;
+grid on;
+title('Boundary Samples');
+
+nexttile;
+plot(xb(:, 1), xb(:, 2), 'b.', 'MarkerSize', 12);
+hold on;
+quiver(xb(:, 1), xb(:, 2), nrmls(:, 1), nrmls(:, 2), 0.05, 'Color', [0.82 0.18 0.18]);
+axis equal;
+grid on;
+title('Boundary Normals');
+
+exportgraphics(fig, fullfile('docs', 'images', 'readme_smooth_2d_geometry.png'), 'Resolution', 180);
 ```
 
 ### Geometry-clipped interior nodes
 
+![Geometry-clipped nodes](docs/images/readme_geometry_clipped_nodes.png)
+
 ```matlab
+% Build the same smooth geometry used in the figure above.
+t = linspace(0, 2*pi, 50).';
+t(end) = [];
+curve = [cos(t), 0.7*sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.05, size(curve,1));
+surface.buildLevelSetFromGeometricModel([]);
+
 % Generate an interior-plus-boundary domain from a geometry and target spacing.
 generator = kp.nodes.DomainNodeGenerator();
 domain = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
@@ -117,11 +157,44 @@ domain = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
 Xi = domain.getInteriorNodes();
 Xb = domain.getBdryNodes();
 Xg = domain.getGhostNodes();
+
+% Plot the clipped node sets and save the figure.
+fig = figure('Color', 'w', 'Position', [100 100 720 560]);
+plot(Xi(:, 1), Xi(:, 2), '.', 'Color', [0.15 0.15 0.15], 'MarkerSize', 10);
+hold on;
+plot(Xb(:, 1), Xb(:, 2), '.', 'Color', [0.85 0.15 0.15], 'MarkerSize', 12);
+plot(Xg(:, 1), Xg(:, 2), '.', 'Color', [0.2 0.45 0.9], 'MarkerSize', 10);
+axis equal;
+grid on;
+legend({'Interior', 'Boundary', 'Ghost'}, 'Location', 'best');
+title('Geometry-Clipped Domain Nodes');
+
+exportgraphics(fig, fullfile('docs', 'images', 'readme_geometry_clipped_nodes.png'), 'Resolution', 180);
 ```
 
 ### RBF-FD operator assembly
 
+![RBF-FD operator assembly](docs/images/readme_rbffd_operator.png)
+
 ```matlab
+% Build a smooth geometry and convert it into a domain.
+t = linspace(0, 2*pi, 50).';
+t(end) = [];
+curve = [cos(t), 0.7*sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.05, size(curve,1));
+surface.buildLevelSetFromGeometricModel([]);
+
+generator = kp.nodes.DomainNodeGenerator();
+domain = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
+    'Seed', 17, ...
+    'StripCount', 5, ...
+    'DoOuterRefinement', true, ...
+    'OuterFractionOfh', 0.5, ...
+    'OuterRefinementZoneSizeAsMultipleOfh', 2.0);
+
 % Ask the code to choose stencil parameters from a target accuracy.
 sp = kp.rbffd.StencilProperties.fromAccuracy( ...
     'Operator', 'lap', ...
@@ -138,9 +211,31 @@ op = kp.rbffd.OpProperties('recordStencils', true);
 assembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
 assembler.AssembleOp(domain, 'lap', sp, op);
 L = assembler.getOp();
+
+% Plot the domain nodes and the Laplacian sparsity pattern, then save the figure.
+fig = figure('Color', 'w', 'Position', [100 100 1000 420]);
+tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+nexttile;
+Xi = domain.getInteriorNodes();
+Xb = domain.getBdryNodes();
+plot(Xi(:, 1), Xi(:, 2), '.', 'Color', [0.15 0.15 0.15], 'MarkerSize', 10);
+hold on;
+plot(Xb(:, 1), Xb(:, 2), '.', 'Color', [0.85 0.15 0.15], 'MarkerSize', 12);
+axis equal;
+grid on;
+title('Domain Nodes');
+
+nexttile;
+spy(L);
+title(sprintf('Laplacian Sparsity (%d x %d)', size(L, 1), size(L, 2)));
+
+exportgraphics(fig, fullfile('docs', 'images', 'readme_rbffd_operator.png'), 'Resolution', 180);
 ```
 
 ### End-to-end Poisson solve with pure Neumann data
+
+![Pure-Neumann Poisson solve](docs/images/readme_poisson_neumann.png)
 
 ```matlab
 % Build a smooth closed domain.
@@ -185,11 +280,51 @@ Xphys = domain.getIntBdryNodes();
 u = result.u;
 uTrue = uExact(Xphys);
 u = u - mean(u - uTrue);
+
+% Plot the numerical solution and the absolute error, then save the figure.
+fig = figure('Color', 'w', 'Position', [100 100 1000 420]);
+tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+nexttile;
+scatter(Xphys(:, 1), Xphys(:, 2), 22, u, 'filled');
+axis equal;
+grid on;
+title('Pure-Neumann Poisson Solution');
+colorbar;
+
+nexttile;
+scatter(Xphys(:, 1), Xphys(:, 2), 22, abs(u - uTrue), 'filled');
+axis equal;
+grid on;
+title('Absolute Error');
+colorbar;
+
+exportgraphics(fig, fullfile('docs', 'images', 'readme_poisson_neumann.png'), 'Resolution', 180);
 ```
 
 ### Diffusion stepping
 
+![Diffusion stepping](docs/images/readme_diffusion_stepping.png)
+
 ```matlab
+% Build a smooth geometry and convert it into a domain.
+t = linspace(0, 2*pi, 80).';
+t(end) = [];
+curve = [cos(t), 0.8*sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.06, size(curve, 1));
+surface.buildLevelSetFromGeometricModel([]);
+
+generator = kp.nodes.DomainNodeGenerator();
+domain = generator.buildDomainDescriptorFromGeometry(surface, 0.1, ...
+    'Seed', 17, ...
+    'StripCount', 5, ...
+    'DoOuterRefinement', true, ...
+    'OuterFractionOfh', 0.5, ...
+    'OuterRefinementZoneSizeAsMultipleOfh', 2.0);
+
 % Set up a fixed-domain diffusion stepper on the same domain.
 solver = kp.solvers.DiffusionSolver( ...
     'LapAssembler', 'fd', ...
@@ -239,6 +374,33 @@ end
 uFinal = states{end};
 uTrueFinal = uExact(tFinal, Xphys);
 maxError = max(abs(uFinal - uTrueFinal));
+
+% Plot two intermediate states and the final absolute error, then save the figure.
+fig = figure('Color', 'w', 'Position', [100 100 1200 380]);
+tiledlayout(1, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+nexttile;
+scatter(Xphys(:, 1), Xphys(:, 2), 22, states{2}, 'filled');
+axis equal;
+grid on;
+title('BDF1 State');
+colorbar;
+
+nexttile;
+scatter(Xphys(:, 1), Xphys(:, 2), 22, states{3}, 'filled');
+axis equal;
+grid on;
+title('BDF2 State');
+colorbar;
+
+nexttile;
+scatter(Xphys(:, 1), Xphys(:, 2), 22, abs(uFinal - uTrueFinal), 'filled');
+axis equal;
+grid on;
+title('Final Absolute Error');
+colorbar;
+
+exportgraphics(fig, fullfile('docs', 'images', 'readme_diffusion_stepping.png'), 'Resolution', 180);
 ```
 
 ## Package tour
