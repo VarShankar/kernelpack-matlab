@@ -50,6 +50,7 @@ axis equal;
 grid on;
 title('Boundary Normals');
 
+finalizeReadmeFigure(fig);
 exportgraphics(fig, outFile, 'Resolution', 180);
 close(fig);
 end
@@ -85,6 +86,7 @@ axis equal;
 grid on;
 legend({'Interior', 'Boundary', 'Ghost'}, 'Location', 'best');
 title('Geometry-Clipped Domain Nodes');
+finalizeReadmeFigure(fig);
 exportgraphics(fig, outFile, 'Resolution', 180);
 close(fig);
 end
@@ -137,6 +139,7 @@ nexttile;
 spy(L);
 title(sprintf('Laplacian Sparsity (%d x %d)', size(L, 1), size(L, 2)));
 
+finalizeReadmeFigure(fig);
 exportgraphics(fig, outFile, 'Resolution', 180);
 close(fig);
 end
@@ -174,6 +177,7 @@ bc = @(NeuCoeffs, DirCoeffs, nr, Xb) ...
 
 result = solver.solve(forcing, neuCoeff, dirCoeff, bc);
 Xphys = domain.getIntBdryNodes();
+tri = delaunay(Xphys(:, 1), Xphys(:, 2));
 u = result.u;
 uTrue = uExact(Xphys);
 u = u - mean(u - uTrue);
@@ -183,19 +187,24 @@ fig = figure('Color', 'w', 'Position', [100 100 1000 420]);
 tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, u, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), u, u, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Pure-Neumann Poisson Solution');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, absErr, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), absErr, absErr, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Absolute Error');
 colorbar;
 
+finalizeReadmeFigure(fig);
 exportgraphics(fig, outFile, 'Resolution', 180);
 close(fig);
 end
@@ -238,6 +247,7 @@ bc = @(NeuCoeffs, DirCoeffs, nr, time, Xb) uExact(time, Xb);
 tFinal = 0.5;
 nSteps = round(tFinal / dt);
 Xphys = domain.getIntBdryNodes();
+tri = delaunay(Xphys(:, 1), Xphys(:, 2));
 
 solver.setInitialState(uExact(0, Xphys));
 states = {solver.currentPhysicalState()};
@@ -263,26 +273,40 @@ fig = figure('Color', 'w', 'Position', [100 100 1200 380]);
 tiledlayout(1, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, u1, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), u1, u1, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('BDF1 State');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, u2, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), u2, u2, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('BDF2 State');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, absErr, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), absErr, absErr, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Final Absolute Error');
 colorbar;
 
+finalizeReadmeFigure(fig);
 exportgraphics(fig, outFile, 'Resolution', 180);
 close(fig);
+end
+
+function finalizeReadmeFigure(fig)
+axs = findall(fig, 'Type', 'axes');
+for k = 1:numel(axs)
+    disableDefaultInteractivity(axs(k));
+end
 end

@@ -126,6 +126,7 @@ axis equal;
 grid on;
 title('Boundary Normals');
 
+arrayfun(@disableDefaultInteractivity, findall(fig, 'Type', 'axes'));
 exportgraphics(fig, fullfile('docs', 'images', 'readme_smooth_2d_geometry.png'), 'Resolution', 180);
 ```
 
@@ -169,6 +170,7 @@ grid on;
 legend({'Interior', 'Boundary', 'Ghost'}, 'Location', 'best');
 title('Geometry-Clipped Domain Nodes');
 
+arrayfun(@disableDefaultInteractivity, findall(fig, 'Type', 'axes'));
 exportgraphics(fig, fullfile('docs', 'images', 'readme_geometry_clipped_nodes.png'), 'Resolution', 180);
 ```
 
@@ -230,6 +232,7 @@ nexttile;
 spy(L);
 title(sprintf('Laplacian Sparsity (%d x %d)', size(L, 1), size(L, 2)));
 
+arrayfun(@disableDefaultInteractivity, findall(fig, 'Type', 'axes'));
 exportgraphics(fig, fullfile('docs', 'images', 'readme_rbffd_operator.png'), 'Resolution', 180);
 ```
 
@@ -277,28 +280,34 @@ bc = @(NeuCoeffs, DirCoeffs, nr, Xb) ...
 % Solve and align the mean for comparison.
 result = solver.solve(forcing, neuCoeff, dirCoeff, bc);
 Xphys = domain.getIntBdryNodes();
+tri = delaunay(Xphys(:, 1), Xphys(:, 2));
 u = result.u;
 uTrue = uExact(Xphys);
 u = u - mean(u - uTrue);
 
-% Plot the numerical solution and the absolute error, then save the figure.
+% Plot the solution and error on a triangulated physical cloud, then save the figure.
 fig = figure('Color', 'w', 'Position', [100 100 1000 420]);
 tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, u, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), u, u, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Pure-Neumann Poisson Solution');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, abs(u - uTrue), 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), abs(u - uTrue), abs(u - uTrue), 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Absolute Error');
 colorbar;
 
+arrayfun(@disableDefaultInteractivity, findall(fig, 'Type', 'axes'));
 exportgraphics(fig, fullfile('docs', 'images', 'readme_poisson_neumann.png'), 'Resolution', 180);
 ```
 
@@ -352,6 +361,7 @@ bc = @(NeuCoeffs, DirCoeffs, nr, time, Xb) uExact(time, Xb);
 tFinal = 0.5;
 nSteps = round(tFinal / dt);
 Xphys = domain.getIntBdryNodes();
+tri = delaunay(Xphys(:, 1), Xphys(:, 2));
 
 solver.setInitialState(uExact(0, Xphys));
 times = 0;
@@ -375,31 +385,38 @@ uFinal = states{end};
 uTrueFinal = uExact(tFinal, Xphys);
 maxError = max(abs(uFinal - uTrueFinal));
 
-% Plot two intermediate states and the final absolute error, then save the figure.
+% Plot two intermediate states and the final error on a triangulation, then save the figure.
 fig = figure('Color', 'w', 'Position', [100 100 1200 380]);
 tiledlayout(1, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, states{2}, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), states{2}, states{2}, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('BDF1 State');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, states{3}, 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), states{3}, states{3}, 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('BDF2 State');
 colorbar;
 
 nexttile;
-scatter(Xphys(:, 1), Xphys(:, 2), 22, abs(uFinal - uTrueFinal), 'filled');
-axis equal;
+trisurf(tri, Xphys(:, 1), Xphys(:, 2), abs(uFinal - uTrueFinal), abs(uFinal - uTrueFinal), 'EdgeColor', 'none');
+shading interp;
+view(2);
+axis equal tight;
 grid on;
 title('Final Absolute Error');
 colorbar;
 
+arrayfun(@disableDefaultInteractivity, findall(fig, 'Type', 'axes'));
 exportgraphics(fig, fullfile('docs', 'images', 'readme_diffusion_stepping.png'), 'Resolution', 180);
 ```
 
