@@ -250,6 +250,52 @@ assembler.AssembleOp(domain, 'lap', sp, op);
 L = assembler.getOp();
 ```
 
+### Full RBF-FD workflow from geometry to operator
+
+```matlab
+t = linspace(0, 2*pi, 80).';
+t(end) = [];
+curve = [cos(t), 0.7*sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.05, size(curve, 1), 160);
+surface.buildLevelSetFromGeometricModel([]);
+
+generator = kp.nodes.DomainNodeGenerator();
+domain = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
+    'Seed', 17, ...
+    'StripCount', 5, ...
+    'DoOuterRefinement', true, ...
+    'OuterFractionOfh', 0.5, ...
+    'OuterRefinementZoneSizeAsMultipleOfh', 2.0);
+
+sp = kp.rbffd.StencilProperties( ...
+    'n', 25, ...
+    'dim', 2, ...
+    'ell', 4, ...
+    'spline_degree', 5, ...
+    'treeMode', 'all', ...
+    'pointSet', 'interior_boundary');
+op = kp.rbffd.OpProperties('recordStencils', true);
+
+lapAssembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
+lapAssembler.AssembleOp(domain, 'lap', sp, op);
+L = lapAssembler.getOp();
+
+bcAssembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
+nb = domain.getNumBdryNodes();
+bcAssembler.AssembleOp(domain, 'bc', sp, op, ...
+    'NeuCoeff', zeros(nb, 1), ...
+    'DirCoeff', ones(nb, 1));
+BC = bcAssembler.getOp();
+```
+
+That path starts from a geometric model, generates interior, boundary, and
+ghost nodes through `DomainNodeGenerator`, packs them into a
+`DomainDescriptor`, and then assembles interior and boundary RBF-FD operators
+from the descriptor.
+
 ## Project direction
 
 The goal is still to keep building outward from the KernelPack contracts
