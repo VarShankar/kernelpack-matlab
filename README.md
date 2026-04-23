@@ -507,6 +507,51 @@ result = solver.solve(forcing, neuCoeff, dirCoeff, bc);
 u = result.u;
 ```
 
+### End-to-end Poisson solve with pure Neumann data
+
+```matlab
+% Build a smooth closed domain from boundary data.
+t = linspace(0, 2*pi, 120).';
+t(end) = [];
+curve = [cos(t), sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.06, size(curve,1));
+surface.buildLevelSetFromGeometricModel([]);
+
+% Generate interior, boundary, and ghost nodes from the geometry.
+generator = kp.nodes.DomainNodeGenerator();
+domain = generator.buildDomainDescriptorFromGeometry(surface, 0.08, ...
+    'Seed', 17, 'StripCount', 5);
+
+% Set up an RBF-FD Poisson solve on the assembled domain.
+solver = kp.solvers.PoissonSolver( ...
+    'LapAssembler', 'fd', ...
+    'BCAssembler', 'fd', ...
+    'LapStencil', 'rbf', ...
+    'BCStencil', 'rbf');
+solver.init(domain, 4);
+
+% Use a pure-Neumann manufactured solution on the unit disk.
+uExact = @(X) (X(:,1).^2 + X(:,2).^2).^2 - (X(:,1).^2 + X(:,2).^2) + 1/6;
+forcing = @(X) 4 - 16*(X(:,1).^2 + X(:,2).^2);
+neuCoeff = @(Xb) ones(size(Xb,1), 1);
+dirCoeff = @(Xb) zeros(size(Xb,1), 1);
+bc = @(NeuCoeffs, DirCoeffs, nr, Xb) ...
+    sum(([4*Xb(:,1).*(Xb(:,1).^2 + Xb(:,2).^2) - 2*Xb(:,1), ...
+          4*Xb(:,2).*(Xb(:,1).^2 + Xb(:,2).^2) - 2*Xb(:,2)]).*nr, 2);
+
+% Solve the square ghost-node system with the usual nullspace augmentation.
+result = solver.solve(forcing, neuCoeff, dirCoeff, bc);
+
+% Pure Neumann solutions are only defined up to a constant, so align the means.
+Xphys = domain.getIntBdryNodes();
+u = result.u;
+uTrue = uExact(Xphys);
+u = u - mean(u - uTrue);
+```
+
 The same solver can be switched to a different Laplacian or boundary backend
 just by changing the constructor options:
 
