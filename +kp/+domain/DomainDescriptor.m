@@ -8,6 +8,7 @@ classdef DomainDescriptor < handle
         X double = zeros(0, 0)
         Xf double = zeros(0, 0)
         Nrmls double = zeros(0, 0)
+        sepRad (1,1) double = NaN
         tallTree struct = struct('Points', [])
         intBdryTree struct = struct('Points', [])
         bdryTree struct = struct('Points', [])
@@ -35,6 +36,11 @@ classdef DomainDescriptor < handle
 
         function setOuterLevelSet(obj, levelSet)
             obj.outerLevelSet = levelSet;
+        end
+
+        function setSepRad(obj, sepRad)
+            validateattributes(sepRad, {'numeric'}, {'scalar', 'real', 'finite', 'positive'});
+            obj.sepRad = sepRad;
         end
 
         function setBoundaryLevelSets(obj, levelSets)
@@ -70,6 +76,12 @@ classdef DomainDescriptor < handle
         function out = getBdryTree(obj), out = obj.bdryTree; end
         function out = getOuterLevelSet(obj), out = obj.outerLevelSet; end
         function out = getBoundaryLevelSets(obj), out = obj.boundaryLevelSets; end
+        function out = getSepRad(obj), out = obj.sepRad; end
+        function out = getDim(obj), out = size(obj.Xf, 2); end
+        function out = getNumTotalNodes(obj), out = size(obj.Xf, 1); end
+        function out = getNumIntBdryNodes(obj), out = size(obj.X, 1); end
+        function out = getNumInteriorNodes(obj), out = size(obj.Xi, 1); end
+        function out = getNumBdryNodes(obj), out = size(obj.Xb, 1); end
     end
 
     methods (Access = private)

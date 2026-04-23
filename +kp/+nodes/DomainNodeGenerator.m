@@ -113,6 +113,7 @@ classdef DomainNodeGenerator < handle
             descriptor = kp.domain.DomainDescriptor();
             descriptor.setNodes(obj.Xi, boundaryNodes, ghostNodes);
             descriptor.setNormals(boundaryNormals);
+            descriptor.setSepRad(minRadiusUsed);
             descriptor.setOuterLevelSet(boundaryLevelSet);
             descriptor.setBoundaryLevelSets({boundaryLevelSet});
             descriptor.buildStructs();

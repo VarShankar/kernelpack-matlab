@@ -18,13 +18,18 @@ KernelPack:
 - `RBFLevelSet`
 - `JacobiPolynomials`
 - `PolynomialBasis`
+- `RBFStencil`
+- `WeightedLeastSquaresStencil`
+- `FDDiffOp`
+- `FDODiffOp`
 - total-degree and hyperbolic-cross index helpers
 - Chebyshev recurrence and evaluation helpers
 - `DomainDescriptor`
 - `DomainNodeGenerator`
 
 These classes live in [`+kp/+geometry`](+kp/+geometry) and
-[`+kp/+nodes`](+kp/+nodes) together with [`+kp/+domain`](+kp/+domain).
+[`+kp/+nodes`](+kp/+nodes) together with [`+kp/+domain`](+kp/+domain),
+[`+kp/+poly`](+kp/+poly), and [`+kp/+rbffd`](+kp/+rbffd).
 
 ## What is here now
 
@@ -46,6 +51,10 @@ The current code establishes a KernelPack-shaped starting point for geometry:
 - `kp.poly` also includes multi-index builders and related helpers such as
   `total_degree_indices`, `hyperbolic_cross_indices`, `chebyshev_recurrence`,
   `chebyshev_eval`, `ratio_eval`, and `hyphelper`.
+- `kp.rbffd` now includes KernelPack-shaped local stencil and assembler
+  classes for RBF-FD and polynomial weighted least-squares work:
+  `RBFStencil`, `WeightedLeastSquaresStencil`, `FDDiffOp`, `FDODiffOp`,
+  `StencilProperties`, and `OpProperties`.
 - `DomainDescriptor` stores the pared-down domain state: interior nodes,
   boundary nodes, ghost nodes, boundary normals, and simple tree placeholders.
 - `DomainNodeGenerator` provides seeded fixed-radius Poisson disk sampling on
@@ -80,6 +89,8 @@ The repository also includes:
 - [`tests/nodes_checks.m`](tests/nodes_checks.m) for basic node-generation
   determinism and spacing checks
 - [`tests/poly_checks.m`](tests/poly_checks.m) for shared polynomial checks
+- [`tests/rbffd_checks.m`](tests/rbffd_checks.m) for the current stencil and
+  assembler checks
 
 ### Seeded box Poisson nodes
 
@@ -205,6 +216,27 @@ surface.buildLevelSetFromGeometricModel([]);
 
 xb = surface.getSampleSites();
 nrmls = surface.getNrmls();
+```
+
+### RBF-FD assembly on a descriptor
+
+```matlab
+[Xg, Yg] = ndgrid(linspace(-1, 1, 5), linspace(-1, 1, 5));
+X = [Xg(:), Yg(:)];
+
+domain = kp.domain.DomainDescriptor();
+domain.setNodes(X, zeros(0, 2), zeros(0, 2));
+domain.setSepRad(0.5);
+domain.buildStructs();
+
+sp = kp.rbffd.StencilProperties( ...
+    'n', 9, 'dim', 2, 'ell', 2, ...
+    'spline_degree', 3, 'treeMode', 1, 'pointSet', 1);
+op = kp.rbffd.OpProperties('recordStencils', true);
+
+assembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
+assembler.AssembleOp(domain, 'lap', sp, op);
+L = assembler.getOp();
 ```
 
 ## Project direction
