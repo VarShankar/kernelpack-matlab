@@ -17,6 +17,8 @@ KernelPack:
 - `PiecewiseSmoothEmbeddedSurface`
 - `RBFLevelSet`
 - `JacobiPolynomials`
+- total-degree and hyperbolic-cross index helpers
+- Chebyshev recurrence and evaluation helpers
 - `DomainDescriptor`
 - `DomainNodeGenerator`
 
@@ -37,6 +39,9 @@ The current code establishes a KernelPack-shaped starting point for geometry:
   gradient evaluation, inside-outside tests, and Newton projection routines.
 - `JacobiPolynomials` provides shared Jacobi recurrence, univariate orthonormal
   polynomial evaluation, derivatives, and tensor-product evaluation.
+- `kp.poly` also includes multi-index builders and related helpers such as
+  `total_degree_indices`, `hyperbolic_cross_indices`, `chebyshev_recurrence`,
+  `chebyshev_eval`, `ratio_eval`, and `hyphelper`.
 - `DomainDescriptor` stores the pared-down domain state: interior nodes,
   boundary nodes, ghost nodes, boundary normals, and simple tree placeholders.
 - `DomainNodeGenerator` provides seeded fixed-radius Poisson disk sampling on
