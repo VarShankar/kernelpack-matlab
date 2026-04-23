@@ -115,14 +115,14 @@ end
 
 function [points, globals, normals] = pickCenters(domain, pointSet)
     normals = [];
-    switch pointSet
-        case 0
+    switch kp.rbffd.StencilProperties.normalizePointSet(pointSet)
+        case "all"
             points = domain.getAllNodes();
             globals = (1:size(points, 1)).';
-        case 1
+        case "interior_boundary"
             points = domain.getIntBdryNodes();
             globals = (1:size(points, 1)).';
-        case 2
+        case "boundary"
             points = domain.getBdryNodes();
             ni = domain.getNumInteriorNodes();
             globals = (ni + (1:size(points, 1))).';
@@ -130,20 +130,20 @@ function [points, globals, normals] = pickCenters(domain, pointSet)
         otherwise
             error('kp:rbffd:BadPointSet', 'Unknown pointSet.');
     end
-    if isempty(normals) && pointSet == 2
+    if isempty(normals) && kp.rbffd.StencilProperties.normalizePointSet(pointSet) == "boundary"
         normals = domain.getNrmls();
     end
 end
 
 function [points, globals] = pickStencilPoints(domain, treeMode)
-    switch treeMode
-        case 0
+    switch kp.rbffd.StencilProperties.normalizeTreeMode(treeMode)
+        case "all"
             points = domain.getAllNodes();
             globals = (1:size(points, 1)).';
-        case 1
+        case "interior_boundary"
             points = domain.getIntBdryNodes();
             globals = (1:size(points, 1)).';
-        case 2
+        case "boundary"
             points = domain.getBdryNodes();
             ni = domain.getNumInteriorNodes();
             globals = (ni + (1:size(points, 1))).';

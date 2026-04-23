@@ -11,7 +11,8 @@ domain.setNodes(X, zeros(0, 2), zeros(0, 2));
 domain.setSepRad(0.5);
 domain.buildStructs();
 
-sp = kp.rbffd.StencilProperties('n', 9, 'dim', 2, 'ell', 2, 'spline_degree', 3, 'treeMode', 1, 'pointSet', 1);
+sp = kp.rbffd.StencilProperties('n', 9, 'dim', 2, 'ell', 2, 'spline_degree', 3, ...
+    'treeMode', 'interior_boundary', 'pointSet', 'interior_boundary');
 op = kp.rbffd.OpProperties('recordStencils', true);
 
 f = X(:, 1).^2 + X(:, 2).^2;
@@ -35,7 +36,8 @@ coveredRows = unique(find(any(Lfdo ~= 0, 2)));
 assert(isequal(coveredRows(:), activeRows(:)), 'FDODiffOp should cover each requested active row exactly once.');
 
 localStencil = X(abs(X(:, 1)) <= 0.5 & abs(X(:, 2)) <= 0.5, :);
-spLocal = kp.rbffd.StencilProperties('n', 9, 'dim', 2, 'ell', 1, 'spline_degree', 3, 'treeMode', 1, 'pointSet', 1);
+spLocal = kp.rbffd.StencilProperties('n', 9, 'dim', 2, 'ell', 1, 'spline_degree', 3, ...
+    'treeMode', 'interior_boundary', 'pointSet', 'interior_boundary');
 stencil = kp.rbffd.WeightedLeastSquaresStencil();
 W = stencil.ComputeWeights(localStencil, spLocal, op, 'interp', 1);
 assert(size(W, 1) == 9 && size(W, 2) == 1, 'WeightedLeastSquaresStencil should return one weight vector per rhs point.');
