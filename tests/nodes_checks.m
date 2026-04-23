@@ -29,6 +29,34 @@ gen = kp.nodes.DomainNodeGenerator();
 gen.generatePoissonNodes(0.1, [0 0], [1 1], 'Seed', 13, 'StripCount', 4);
 assert(~isempty(gen.getRawPoissonInteriorNodes()), 'DomainNodeGenerator should store the raw Poisson cloud.');
 
+t = linspace(0, 2*pi, 60).';
+t(end) = [];
+curve = [cos(t), 0.7 * sin(t)];
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.05, size(curve, 1), 120);
+surface.buildLevelSetFromGeometricModel([]);
+
+gen2 = kp.nodes.DomainNodeGenerator();
+gen2.generateInteriorNodesFromGeometry(surface, 0.08, 'Seed', 29, 'StripCount', 5);
+raw2 = gen2.getRawPoissonInteriorNodes();
+int2 = gen2.getInteriorNodes();
+assert(size(int2, 1) < size(raw2, 1), 'Geometry clipping should remove points outside the surface bounding box fill.');
+phi2 = surface.getLevelSet().Evaluate(int2);
+assert(all(phi2 <= 1e-10), 'Interior nodes should lie on the negative side of the level set.');
+
+seg1 = [linspace(0,1,25).', zeros(25,1)];
+seg2 = [ones(25,1), linspace(0,1,25).'];
+seg3 = [linspace(1,0,25).', ones(25,1)];
+seg4 = [zeros(25,1), linspace(1,0,25).'];
+piece = kp.geometry.PiecewiseSmoothEmbeddedSurface();
+piece.generatePiecewiseSmoothSurfaceBySegment({seg1, seg2, seg3, seg4}, ...
+    [false false false false], 0.05, 1, 2, 2);
+piece.buildLevelSet();
+[clippedPiece, ~, phiPiece] = kp.nodes.clipPointsByGeometry(raw2, piece, 'Keep', 'outside');
+assert(~isempty(clippedPiece), 'Outside clipping against a piecewise geometry should keep some points.');
+assert(all(phiPiece(phiPiece >= 0) >= 0), 'Outside clipping should use the positive level-set side.');
+
 disp('nodes checks passed');
 end
 

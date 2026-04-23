@@ -34,7 +34,8 @@ The current code establishes a KernelPack-shaped starting point for geometry:
 - `RBFLevelSet` provides an implicit boundary representation with evaluation,
   gradient evaluation, inside-outside tests, and Newton projection routines.
 - `DomainNodeGenerator` provides seeded fixed-radius Poisson disk sampling on
-  axis-aligned boxes and stores the raw interior node cloud.
+  axis-aligned boxes, plus geometry-aware clipping from raw box clouds to
+  interior node sets.
 
 At the moment, the implemented geometric-model construction path is the 2D
 and early 3D cases:
@@ -46,6 +47,8 @@ and early 3D cases:
 - open 3D surface patches built from best-fit-plane chart coordinates
 - piecewise 3D surfaces assembled from patch segments
 - fixed-radius Poisson disk sampling on axis-aligned boxes in any dimension
+- level-set clipping of box Poisson clouds against `EmbeddedSurface` and
+  `PiecewiseSmoothEmbeddedSurface`
 
 ## Basic use
 
@@ -70,6 +73,26 @@ generator = kp.nodes.DomainNodeGenerator();
 generator.generatePoissonNodes(0.08, [0 0 0], [1 1 1], 'Seed', 17, 'StripCount', 5);
 
 raw_nodes = generator.getRawPoissonInteriorNodes();
+```
+
+### Geometry-clipped interior nodes
+
+```matlab
+t = linspace(0, 2*pi, 50).';
+t(end) = [];
+curve = [cos(t), 0.7*sin(t)];
+
+surface = kp.geometry.EmbeddedSurface();
+surface.setDataSites(curve);
+surface.buildClosedGeometricModelPS(2, 0.05, size(curve,1), 120);
+surface.buildLevelSetFromGeometricModel([]);
+
+generator = kp.nodes.DomainNodeGenerator();
+generator.generateInteriorNodesFromGeometry(surface, 0.08, ...
+    'Seed', 17, 'StripCount', 5);
+
+interior_nodes = generator.getInteriorNodes();
+raw_box_nodes = generator.getRawPoissonInteriorNodes();
 ```
 
 ### Smooth closed curve
