@@ -283,9 +283,17 @@ lapAssembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
 lapAssembler.AssembleOp(domain, 'lap', sp, op);
 L = lapAssembler.getOp();
 
+bcSp = kp.rbffd.StencilProperties( ...
+    'n', 25, ...
+    'dim', 2, ...
+    'ell', 4, ...
+    'spline_degree', 5, ...
+    'treeMode', 'all', ...
+    'pointSet', 'boundary');
+
 bcAssembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
 nb = domain.getNumBdryNodes();
-bcAssembler.AssembleOp(domain, 'bc', sp, op, ...
+bcAssembler.AssembleOp(domain, 'bc', bcSp, op, ...
     'NeuCoeff', zeros(nb, 1), ...
     'DirCoeff', ones(nb, 1));
 BC = bcAssembler.getOp();
@@ -294,7 +302,9 @@ BC = bcAssembler.getOp();
 That path starts from a geometric model, generates interior, boundary, and
 ghost nodes through `DomainNodeGenerator`, packs them into a
 `DomainDescriptor`, and then assembles interior and boundary RBF-FD operators
-from the descriptor.
+from the descriptor. The current assemblers store rows in the global
+interior-plus-boundary indexing used by the descriptor, so both `L` and `BC`
+are returned in that globally indexed sparse layout.
 
 ## Project direction
 
