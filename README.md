@@ -17,6 +17,7 @@ KernelPack:
 - `PiecewiseSmoothEmbeddedSurface`
 - `RBFLevelSet`
 - `JacobiPolynomials`
+- `PolynomialBasis`
 - total-degree and hyperbolic-cross index helpers
 - Chebyshev recurrence and evaluation helpers
 - `DomainDescriptor`
@@ -39,6 +40,9 @@ The current code establishes a KernelPack-shaped starting point for geometry:
   gradient evaluation, inside-outside tests, and Newton projection routines.
 - `JacobiPolynomials` provides shared Jacobi recurrence, univariate orthonormal
   polynomial evaluation, derivatives, and tensor-product evaluation.
+- `PolynomialBasis` provides a higher-level basis object. It defaults to
+  Legendre polynomials and stores a center and scalar scale factor for mapping
+  stencil points into a unit disk or sphere before evaluation.
 - `kp.poly` also includes multi-index builders and related helpers such as
   `total_degree_indices`, `hyperbolic_cross_indices`, `chebyshev_recurrence`,
   `chebyshev_eval`, `ratio_eval`, and `hyphelper`.
