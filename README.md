@@ -40,6 +40,23 @@ The main packages live in:
 - Fixed-domain Poisson solves
 - Fixed-domain diffusion stepping with BDF1, BDF2, and BDF3
 
+## Status
+
+The current MATLAB implementation includes the main numerical layers that sit
+underneath typical KernelPack-style workflows:
+
+- geometry fitting and level-set construction
+- domain node generation
+- polynomial bases and multi-index utilities
+- local RBF-FD and weighted least-squares stencils
+- sparse operator assembly
+- fixed-domain Poisson and diffusion solvers
+
+The project is still organized around KernelPack-style workflow pieces rather
+than a separate MATLAB abstraction stack. The aim is to make the core methods
+easy to inspect and prototype with while keeping the overall contracts close to
+the broader KernelPack direction.
+
 ## Examples and checks
 
 Examples:
@@ -196,12 +213,116 @@ neuCoeff = @(Xb) zeros(size(Xb, 1), 1);
 dirCoeff = @(Xb) ones(size(Xb, 1), 1);
 bc = @(NeuCoeffs, DirCoeffs, nr, time, Xb) uExact(time, Xb);
 
-% Seed the state history and take BDF steps.
-solver.setInitialState(uExact(0, domain.getIntBdryNodes()));
-u1 = solver.bdf1Step(dt, forcing, neuCoeff, dirCoeff, bc);
-u2 = solver.bdf2Step(2 * dt, forcing, neuCoeff, dirCoeff, bc);
-u3 = solver.bdf3Step(3 * dt, forcing, neuCoeff, dirCoeff, bc);
+% March the solution to a final time.
+tFinal = 0.5;
+nSteps = round(tFinal / dt);
+Xphys = domain.getIntBdryNodes();
+
+solver.setInitialState(uExact(0, Xphys));
+times = 0;
+states = {solver.currentPhysicalState()};
+
+for step = 1:nSteps
+    time = step * dt;
+    if step == 1
+        uNext = solver.bdf1Step(time, forcing, neuCoeff, dirCoeff, bc);
+    elseif step == 2
+        uNext = solver.bdf2Step(time, forcing, neuCoeff, dirCoeff, bc);
+    else
+        uNext = solver.bdf3Step(time, forcing, neuCoeff, dirCoeff, bc);
+    end
+    times(end + 1, 1) = time; %#ok<AGROW>
+    states{end + 1, 1} = uNext; %#ok<AGROW>
+end
+
+% Compare against the manufactured solution at the final time.
+uFinal = states{end};
+uTrueFinal = uExact(tFinal, Xphys);
+maxError = max(abs(uFinal - uTrueFinal));
 ```
+
+## Package tour
+
+### `kp.geometry`
+
+This package contains the geometry-facing pieces of the MATLAB implementation:
+
+- `EmbeddedSurface` for smooth closed and open fitted boundaries/surfaces
+- `PiecewiseSmoothEmbeddedSurface` for segmented piecewise boundaries
+- `RBFLevelSet` for implicit geometry representation and Newton projection
+- shared helpers such as `distanceMatrix`, `fibonacciSphere`,
+  `projectToBestFitPlane`, and `phsKernel`
+
+These classes support the usual workflow of fitting a geometry to input sites,
+sampling boundary points and normals, building an implicit level set, and then
+using that level set for node generation and solver workflows.
+
+### `kp.nodes`
+
+This package handles point generation and geometry clipping:
+
+- `generatePoissonNodesInBox`
+- `clipPointsByGeometry`
+- `boundingBoxExtents`
+- `DomainNodeGenerator`
+
+The node-generation path supports deterministic seeded box sampling,
+geometry-aware clipping, outer refinement bands near boundaries, and assembly
+into a `DomainDescriptor`.
+
+### `kp.domain`
+
+`DomainDescriptor` is the compact container that links node generation and
+operator assembly. It stores:
+
+- interior nodes
+- boundary nodes
+- ghost nodes
+- boundary normals
+- all-node and subset node clouds
+- nearest-neighbor search structures
+- domain metadata such as separation radius and level sets
+
+### `kp.poly`
+
+This package provides shared polynomial support:
+
+- Jacobi/Legendre/Chebyshev recurrence helpers
+- tensor-product polynomial evaluation
+- total-degree and hyperbolic-cross multi-index builders
+- `PolynomialBasis`, including normalization around a local center and scale
+
+This is the polynomial backbone used by both the RBF-FD and weighted
+least-squares stencil paths.
+
+### `kp.rbffd`
+
+This package contains the local discretization and assembly layer:
+
+- `RBFStencil`
+- `WeightedLeastSquaresStencil`
+- `StencilProperties`
+- `OpProperties`
+- `FDDiffOp`
+- `FDODiffOp`
+
+Current operator support includes:
+
+- interpolation
+- directional gradients
+- Laplacians
+- mixed Neumann/Dirichlet boundary-condition rows
+
+### `kp.solvers`
+
+This package contains the current fixed-domain solver layer:
+
+- `PoissonSolver`
+- `DiffusionSolver`
+
+The solver layer is intentionally direct. It is built on top of
+`DomainDescriptor` and the `rbffd` assembly path rather than introducing a
+separate solver abstraction hierarchy.
 
 ## Notes
 
