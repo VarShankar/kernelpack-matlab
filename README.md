@@ -16,6 +16,7 @@ KernelPack:
 - `EmbeddedSurface`
 - `PiecewiseSmoothEmbeddedSurface`
 - `RBFLevelSet`
+- `JacobiPolynomials`
 - `DomainDescriptor`
 - `DomainNodeGenerator`
 
@@ -34,6 +35,8 @@ The current code establishes a KernelPack-shaped starting point for geometry:
   and level-set representation for a piecewise-smooth boundary.
 - `RBFLevelSet` provides an implicit boundary representation with evaluation,
   gradient evaluation, inside-outside tests, and Newton projection routines.
+- `JacobiPolynomials` provides shared Jacobi recurrence, univariate orthonormal
+  polynomial evaluation, derivatives, and tensor-product evaluation.
 - `DomainDescriptor` stores the pared-down domain state: interior nodes,
   boundary nodes, ghost nodes, boundary normals, and simple tree placeholders.
 - `DomainNodeGenerator` provides seeded fixed-radius Poisson disk sampling on
@@ -67,6 +70,7 @@ The repository also includes:
   Poisson node generation examples, including parallel clipping
 - [`tests/nodes_checks.m`](tests/nodes_checks.m) for basic node-generation
   determinism and spacing checks
+- [`tests/poly_checks.m`](tests/poly_checks.m) for shared polynomial checks
 
 ### Seeded box Poisson nodes
 
