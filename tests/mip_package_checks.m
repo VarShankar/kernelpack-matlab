@@ -1,5 +1,5 @@
 function mip_package_checks()
-%MIP_PACKAGE_CHECKS Fast smoke test for MIP package installs.
+%MIP_PACKAGE_CHECKS Fast package check for MIP installs.
 
 domain = create_disk_domain(0.18);
 
@@ -15,7 +15,7 @@ assembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
 assembler.AssembleOp(domain, 'lap', sp, kp.rbffd.OpProperties());
 L = assembler.getOp();
 assert(~isempty(L) && size(L, 2) == domain.getNumTotalNodes(), ...
-    'RBF-FD assembly failed in MIP package smoke test.');
+    'RBF-FD assembly failed in the MIP package check.');
 
 solver = kp.solvers.PoissonSolver( ...
     'LapAssembler', 'fd', ...
@@ -35,7 +35,7 @@ result = solver.solve( ...
     @(NeuCoeffs, DirCoeffs, nr, Xb) uExact(Xb));
 
 relerr = norm(result.u - uExact(X)) / norm(uExact(X));
-assert(relerr < 2e-1, 'PoissonSolver smoke solve failed in MIP package test.');
+assert(relerr < 2e-1, 'PoissonSolver package check solve failed.');
 
 disp('mip package checks passed');
 end

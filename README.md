@@ -65,7 +65,7 @@ mip install -e E:/kernelpack-matlab
 mip load kernelpack_matlab
 ```
 
-Run the package smoke test:
+Run the package check:
 
 ```matlab
 mip test kernelpack_matlab
