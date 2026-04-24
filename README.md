@@ -18,7 +18,7 @@ prototype with, and extend.
 - Shared polynomial utilities in `kp.poly`, including Legendre-based
   `PolynomialBasis`
 - RBF-FD and weighted least-squares stencil and assembly classes in `kp.rbffd`
-- Fixed-domain `PoissonSolver` and `DiffusionSolver`
+- Fixed-domain `PoissonSolver`, `VariablePoissonSolver`, and `DiffusionSolver`
 - PU diffusion and PU-SL transport-coupled solvers:
   `PUDiffusionSolver`, `MultiSpeciesPUDiffusionSolver`,
   `PUSLAdvectionSolver`, `MultiSpeciesPUSLAdvectionSolver`,
@@ -42,6 +42,7 @@ The main packages live in:
 - Level-set clipping of box clouds to geometry-defined domains
 - Standard and overlapped RBF-FD assembly
 - Fixed-domain Poisson solves
+- Fixed-domain variable-coefficient Poisson solves
 - Fixed-domain diffusion stepping with BDF1, BDF2, and BDF3
 - PU semi-Lagrangian advection on fixed domains
 - PU diffusion stepping with BDF1, BDF2, and BDF3
@@ -95,6 +96,7 @@ Examples:
 - [`examples/geometry_examples.m`](examples/geometry_examples.m)
 - [`examples/nodes_examples.m`](examples/nodes_examples.m)
 - [`examples/poisson_solver_example.m`](examples/poisson_solver_example.m)
+- [`examples/variable_poisson_solver_example.m`](examples/variable_poisson_solver_example.m)
 - [`examples/poisson_solver_example_3d.m`](examples/poisson_solver_example_3d.m)
 - [`examples/diffusion_solver_example.m`](examples/diffusion_solver_example.m)
 - [`examples/pu_diffusion_convergence_2d.m`](examples/pu_diffusion_convergence_2d.m)
@@ -115,6 +117,7 @@ Checks:
 - [`tests/poly_checks.m`](tests/poly_checks.m)
 - [`tests/rbffd_checks.m`](tests/rbffd_checks.m)
 - [`tests/poisson_solver_checks.m`](tests/poisson_solver_checks.m)
+- [`tests/variable_poisson_solver_checks.m`](tests/variable_poisson_solver_checks.m)
 - [`tests/diffusion_solver_checks.m`](tests/diffusion_solver_checks.m)
 - [`tests/pusl_advection_checks.m`](tests/pusl_advection_checks.m)
 - [`tests/pusl_multispecies_checks.m`](tests/pusl_multispecies_checks.m)
@@ -540,6 +543,7 @@ Current operator support includes:
 This package contains the current fixed-domain solver layer:
 
 - `PoissonSolver`
+- `VariablePoissonSolver`
 - `DiffusionSolver`
 
 The solver layer is intentionally direct. It is built on top of
