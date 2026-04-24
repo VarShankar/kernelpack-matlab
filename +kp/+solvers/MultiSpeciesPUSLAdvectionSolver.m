@@ -69,14 +69,15 @@ classdef MultiSpeciesPUSLAdvectionSolver < handle
         function coeffs = projectInitial(obj, rho0)
             ensureInitialized(obj);
             X = obj.solver.getOutputNodes();
-            coeffs = zeros(size(X, 1), obj.num_species);
+            nodal_samples = zeros(size(X, 1), obj.num_species);
             for i = 1:size(X, 1)
                 values = rho0(X(i, :));
                 if numel(values) ~= obj.num_species
                     error('kp:solvers:BadSpeciesCount', 'Initial callback returned the wrong number of species values.');
                 end
-                coeffs(i, :) = reshape(values, 1, []);
+                nodal_samples(i, :) = reshape(values, 1, []);
             end
+            coeffs = obj.solver.projectSamples(nodal_samples);
         end
 
         function coeffs = projectConstant(obj, value)

@@ -22,7 +22,9 @@ prototype with, and extend.
 - PU diffusion and PU-SL transport-coupled solvers:
   `PUDiffusionSolver`, `MultiSpeciesPUDiffusionSolver`,
   `PUSLAdvectionSolver`, `MultiSpeciesPUSLAdvectionSolver`,
-  `PUSLFDAdvectionDiffusionSolver`, and `PUSLPUAdvectionDiffusionSolver`
+  `PUSLFDAdvectionDiffusionSolver`, `PUSLPUAdvectionDiffusionSolver`,
+  `PUSLFDAdvectionDiffusionReactionSolver`, and
+  `PUSLPUAdvectionDiffusionReactionSolver`
 
 The main packages live in:
 
@@ -47,6 +49,7 @@ The main packages live in:
 - PU semi-Lagrangian advection on fixed domains
 - PU diffusion stepping with BDF1, BDF2, and BDF3
 - Coupled PU-SL advection-diffusion with either FD or PU diffusion
+- Coupled PU-SL advection-diffusion-reaction with either FD or PU diffusion
 
 ## MIP install
 
@@ -105,6 +108,8 @@ Examples:
 - [`examples/pusl_multispecies_convergence_2d.m`](examples/pusl_multispecies_convergence_2d.m)
 - [`examples/pusl_fd_advection_diffusion_convergence_2d.m`](examples/pusl_fd_advection_diffusion_convergence_2d.m)
 - [`examples/pusl_pu_advection_diffusion_convergence_2d.m`](examples/pusl_pu_advection_diffusion_convergence_2d.m)
+- [`examples/pusl_fd_advection_diffusion_reaction_convergence_2d.m`](examples/pusl_fd_advection_diffusion_reaction_convergence_2d.m)
+- [`examples/pusl_pu_advection_diffusion_reaction_convergence_2d.m`](examples/pusl_pu_advection_diffusion_reaction_convergence_2d.m)
 - [`examples/poisson_convergence_2d.m`](examples/poisson_convergence_2d.m)
 - [`examples/poisson_convergence_2d_neumann.m`](examples/poisson_convergence_2d_neumann.m)
 - [`examples/poisson_convergence_3d.m`](examples/poisson_convergence_3d.m)
@@ -122,9 +127,11 @@ Checks:
 - [`tests/pusl_advection_checks.m`](tests/pusl_advection_checks.m)
 - [`tests/pusl_multispecies_checks.m`](tests/pusl_multispecies_checks.m)
 - [`tests/pusl_fd_advection_diffusion_checks.m`](tests/pusl_fd_advection_diffusion_checks.m)
+- [`tests/pusl_fd_advection_diffusion_reaction_checks.m`](tests/pusl_fd_advection_diffusion_reaction_checks.m)
 - [`tests/pu_diffusion_checks.m`](tests/pu_diffusion_checks.m)
 - [`tests/multispecies_pu_diffusion_checks.m`](tests/multispecies_pu_diffusion_checks.m)
 - [`tests/pusl_pu_advection_diffusion_checks.m`](tests/pusl_pu_advection_diffusion_checks.m)
+- [`tests/pusl_pu_advection_diffusion_reaction_checks.m`](tests/pusl_pu_advection_diffusion_reaction_checks.m)
 
 ## Quick examples
 

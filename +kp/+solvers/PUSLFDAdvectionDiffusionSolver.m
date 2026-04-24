@@ -10,13 +10,18 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
         direction string = "backward"
         advection kp.solvers.PUSLAdvectionSolver = kp.solvers.PUSLAdvectionSolver()
         diffusion kp.solvers.DiffusionSolver = kp.solvers.DiffusionSolver('LapStencil', 'rbf', 'BCStencil', 'rbf')
-        state_nm2 double = zeros(0, 1)
-        state_nm1 double = zeros(0, 1)
-        state_n double = zeros(0, 1)
+        coeff_nm2 double = zeros(0, 0)
+        coeff_nm1 double = zeros(0, 0)
+        coeff_n double = zeros(0, 0)
         completed_steps (1,1) double = 0
         enforce_mass_constraint (1,1) logical = false
         mass_constraint_target (1,1) double = 0
         has_explicit_mass_constraint_target (1,1) logical = false
+        constant_mode double = zeros(0, 0)
+        constant_mode_mass (1,1) double = 0
+        local_begin (1,1) double = 1
+        local_end (1,1) double = 0
+        physical_nodes double = zeros(0, 0)
     end
 
     methods
@@ -35,14 +40,21 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
             obj.nu = nu;
             obj.direction = lower(string(direction));
 
-            % Couple one transport solver with one diffusion solver, but
-            % keep the state history at this wrapper level.
             obj.advection.init(domain, xi_sl, dt);
             obj.diffusion.init(domain, xi_fd, dt, nu, num_omp_threads);
 
-            obj.state_nm2 = zeros(0, 1);
-            obj.state_nm1 = zeros(0, 1);
-            obj.state_n = zeros(0, 1);
+            output_range = obj.advection.getOutputRange();
+            obj.local_begin = output_range(1);
+            obj.local_end = output_range(2);
+            obj.physical_nodes = obj.advection.getOutputNodes();
+            requireMatchingNodes(obj.physical_nodes, obj.diffusion.getOutputNodes(), ...
+                'PUSLFDAdvectionDiffusionSolver::init');
+            obj.constant_mode = obj.advection.projectConstant(1.0, 1);
+            obj.constant_mode_mass = obj.advection.totalMass(obj.constant_mode, 1);
+
+            obj.coeff_nm2 = zeros(0, 0);
+            obj.coeff_nm1 = zeros(0, 0);
+            obj.coeff_n = zeros(0, 0);
             obj.completed_steps = 0;
         end
 
@@ -66,12 +78,12 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
             end
             obj.enforce_mass_constraint = logical(enable);
             if enable && ~obj.has_explicit_mass_constraint_target
-                if obj.completed_steps >= 2 && ~isempty(obj.state_n)
-                    obj.mass_constraint_target = obj.totalMass(obj.state_n);
-                elseif obj.completed_steps >= 1 && ~isempty(obj.state_nm1)
-                    obj.mass_constraint_target = obj.totalMass(obj.state_nm1);
-                elseif ~isempty(obj.state_nm2)
-                    obj.mass_constraint_target = obj.totalMass(obj.state_nm2);
+                if obj.completed_steps >= 2 && ~isempty(obj.coeff_n)
+                    obj.mass_constraint_target = massOfCoefficients(obj, obj.coeff_n);
+                elseif obj.completed_steps >= 1 && ~isempty(obj.coeff_nm1)
+                    obj.mass_constraint_target = massOfCoefficients(obj, obj.coeff_nm1);
+                elseif ~isempty(obj.coeff_nm2)
+                    obj.mass_constraint_target = massOfCoefficients(obj, obj.coeff_nm2);
                 end
             end
         end
@@ -87,11 +99,12 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
         end
 
         function setInitialState(obj, state)
-            obj.state_nm2 = state(:);
-            obj.state_nm1 = zeros(0, 1);
-            obj.state_n = zeros(0, 1);
+            local_state = extractLocalPhysicalState(obj, state);
+            obj.coeff_nm2 = obj.advection.projectSamples(local_state(:));
+            obj.coeff_nm1 = zeros(0, 0);
+            obj.coeff_n = zeros(0, 0);
             obj.completed_steps = 0;
-            initializeMassConstraintTarget(obj, obj.state_nm2);
+            initializeMassConstraintTarget(obj, obj.coeff_nm2);
         end
 
         function setStateHistory(obj, varargin)
@@ -99,28 +112,28 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
                 case 1
                     obj.setInitialState(varargin{1});
                 case 2
-                    obj.state_nm2 = varargin{1}(:);
-                    obj.state_nm1 = varargin{2}(:);
-                    obj.state_n = zeros(0, 1);
+                    obj.coeff_nm2 = obj.advection.projectSamples(extractLocalPhysicalState(obj, varargin{1}));
+                    obj.coeff_nm1 = obj.advection.projectSamples(extractLocalPhysicalState(obj, varargin{2}));
+                    obj.coeff_n = zeros(0, 0);
                     obj.completed_steps = 1;
-                    initializeMassConstraintTarget(obj, obj.state_nm1);
+                    initializeMassConstraintTarget(obj, obj.coeff_nm1);
                 case 3
-                    obj.state_nm2 = varargin{1}(:);
-                    obj.state_nm1 = varargin{2}(:);
-                    obj.state_n = varargin{3}(:);
+                    obj.coeff_nm2 = obj.advection.projectSamples(extractLocalPhysicalState(obj, varargin{1}));
+                    obj.coeff_nm1 = obj.advection.projectSamples(extractLocalPhysicalState(obj, varargin{2}));
+                    obj.coeff_n = obj.advection.projectSamples(extractLocalPhysicalState(obj, varargin{3}));
                     obj.completed_steps = 2;
-                    initializeMassConstraintTarget(obj, obj.state_n);
+                    initializeMassConstraintTarget(obj, obj.coeff_n);
                 otherwise
                     error('kp:solvers:BadStateHistory', 'Expected one, two, or three physical states.');
             end
         end
 
         function out = getOutputNodes(obj)
-            out = obj.advection.getOutputNodes();
+            out = obj.physical_nodes;
         end
 
         function out = getOutputRange(obj)
-            out = obj.advection.getOutputRange();
+            out = [obj.local_begin, obj.local_end];
         end
 
         function out = returnsDistributedState(obj)
@@ -136,120 +149,145 @@ classdef PUSLFDAdvectionDiffusionSolver < handle
         end
 
         function next_state = bdf1Step(obj, t_next, velocity, rk, forcing, NeuCoeffFunc, DirCoeffFunc, bc)
-            assert(~isempty(obj.state_nm2), 'PUSLFDAdvectionDiffusionSolver::bdf1Step requires setInitialState first.');
-            % Transport first, then diffuse the transported state with the
-            % corresponding BDF step.
-            transported_nm2 = transportState(obj, t_next - obj.dt, obj.state_nm2, 1, velocity, rk);
+            assert(~isempty(obj.coeff_nm2), 'PUSLFDAdvectionDiffusionSolver::bdf1Step requires setInitialState first.');
+            transported_coeff_nm2 = transportCoefficients(obj, t_next - obj.dt, obj.coeff_nm2, 1, velocity, rk);
+            transported_nm2 = evaluateSingleState(obj, transported_coeff_nm2);
             obj.diffusion.setStateHistory(transported_nm2);
             next_state = obj.diffusion.bdf1Step(t_next, forcing, NeuCoeffFunc, DirCoeffFunc, bc);
-            if obj.enforce_mass_constraint
-                forcing_mass = totalMass(obj, evaluateForcing(obj, forcing, t_next));
-                target = totalMass(obj, transported_nm2) + obj.dt * forcing_mass;
-                next_state = enforceMassTarget(obj, next_state, target);
-            end
-            obj.state_nm1 = next_state;
+            coeff_next = obj.advection.projectSamples(next_state(:));
+            enforceCoefficientMassTargetIfNeeded(obj, coeff_next);
+            obj.coeff_nm1 = coeff_next;
             obj.completed_steps = 1;
+            next_state = currentState(obj);
         end
 
         function next_state = bdf2Step(obj, t_next, velocity, rk, forcing, NeuCoeffFunc, DirCoeffFunc, bc)
-            assert(obj.completed_steps >= 1 && ~isempty(obj.state_nm1), ...
+            assert(obj.completed_steps >= 1 && ~isempty(obj.coeff_nm1), ...
                 'PUSLFDAdvectionDiffusionSolver::bdf2Step requires one prior step.');
             velocity_fn = velocity;
-            transported_nm2 = transportState(obj, t_next - 2 * obj.dt, obj.state_nm2, 2, velocity_fn, rk);
-            transported_nm1 = transportState(obj, t_next - obj.dt, obj.state_nm1, 1, velocity_fn, rk);
+            transported_coeff_nm2 = transportCoefficients(obj, t_next - 2 * obj.dt, obj.coeff_nm2, 2, velocity_fn, rk);
+            transported_coeff_nm1 = transportCoefficients(obj, t_next - obj.dt, obj.coeff_nm1, 1, velocity_fn, rk);
+            transported_nm2 = evaluateSingleState(obj, transported_coeff_nm2);
+            transported_nm1 = evaluateSingleState(obj, transported_coeff_nm1);
             obj.diffusion.setStateHistory(transported_nm2, transported_nm1);
             next_state = obj.diffusion.bdf2Step(t_next, forcing, NeuCoeffFunc, DirCoeffFunc, bc);
-            if obj.enforce_mass_constraint
-                forcing_mass = totalMass(obj, evaluateForcing(obj, forcing, t_next));
-                target = (4 * totalMass(obj, transported_nm1) - totalMass(obj, transported_nm2) + 2 * obj.dt * forcing_mass) / 3;
-                next_state = enforceMassTarget(obj, next_state, target);
-            end
-            obj.state_n = next_state;
+            coeff_next = obj.advection.projectSamples(next_state(:));
+            enforceCoefficientMassTargetIfNeeded(obj, coeff_next);
+            obj.coeff_n = coeff_next;
             obj.completed_steps = 2;
+            next_state = currentState(obj);
         end
 
         function next_state = bdf3Step(obj, t_next, velocity, rk, forcing, NeuCoeffFunc, DirCoeffFunc, bc)
-            assert(obj.completed_steps >= 2 && ~isempty(obj.state_n), ...
+            assert(obj.completed_steps >= 2 && ~isempty(obj.coeff_n), ...
                 'PUSLFDAdvectionDiffusionSolver::bdf3Step requires two prior steps.');
             velocity_fn = velocity;
-            transported_nm2 = transportState(obj, t_next - 3 * obj.dt, obj.state_nm2, 3, velocity_fn, rk);
-            transported_nm1 = transportState(obj, t_next - 2 * obj.dt, obj.state_nm1, 2, velocity_fn, rk);
-            transported_n = transportState(obj, t_next - obj.dt, obj.state_n, 1, velocity_fn, rk);
+            transported_coeff_nm2 = transportCoefficients(obj, t_next - 3 * obj.dt, obj.coeff_nm2, 3, velocity_fn, rk);
+            transported_coeff_nm1 = transportCoefficients(obj, t_next - 2 * obj.dt, obj.coeff_nm1, 2, velocity_fn, rk);
+            transported_coeff_n = transportCoefficients(obj, t_next - obj.dt, obj.coeff_n, 1, velocity_fn, rk);
+            transported_nm2 = evaluateSingleState(obj, transported_coeff_nm2);
+            transported_nm1 = evaluateSingleState(obj, transported_coeff_nm1);
+            transported_n = evaluateSingleState(obj, transported_coeff_n);
             obj.diffusion.setStateHistory(transported_nm2, transported_nm1, transported_n);
             next_state = obj.diffusion.bdf3Step(t_next, forcing, NeuCoeffFunc, DirCoeffFunc, bc);
-            if obj.enforce_mass_constraint
-                forcing_mass = totalMass(obj, evaluateForcing(obj, forcing, t_next));
-                target = (18 * totalMass(obj, transported_n) - 9 * totalMass(obj, transported_nm1) + ...
-                    2 * totalMass(obj, transported_nm2) + 6 * obj.dt * forcing_mass) / 11;
-                next_state = enforceMassTarget(obj, next_state, target);
-            end
-            obj.state_nm2 = obj.state_nm1;
-            obj.state_nm1 = obj.state_n;
-            obj.state_n = next_state;
+            coeff_next = obj.advection.projectSamples(next_state(:));
+            enforceCoefficientMassTargetIfNeeded(obj, coeff_next);
+            obj.coeff_nm2 = obj.coeff_nm1;
+            obj.coeff_nm1 = obj.coeff_n;
+            obj.coeff_n = coeff_next;
             obj.completed_steps = max(obj.completed_steps, 3);
+            next_state = currentState(obj);
         end
 
         function out = currentState(obj)
-            if obj.completed_steps <= 0
-                out = obj.state_nm2;
-            elseif obj.completed_steps == 1
-                out = obj.state_nm1;
-            else
-                out = obj.state_n;
+            coeffs = currentCoefficients(obj);
+            if isempty(coeffs)
+                out = zeros(0, 1);
+                return;
             end
+            out = evaluateSingleState(obj, coeffs);
         end
 
         function out = totalMass(obj, local_state)
-            out = obj.advection.totalMass(local_state(:), 1);
+            coeffs = obj.advection.projectSamples(extractLocalPhysicalState(obj, local_state));
+            out = obj.advection.totalMass(coeffs, 1);
         end
     end
 end
 
-function transported = transportState(obj, t_start, state, num_steps, velocity, rk)
-% Reuse the PU-SL advection solver over a longer time horizon when older
-% BDF states need to be transported to the current step.
+function out = extractLocalPhysicalState(obj, state)
+state = state(:);
+local_count = obj.local_end - obj.local_begin + 1;
+if numel(state) == local_count
+    out = state;
+elseif obj.local_end <= numel(state)
+    out = state(obj.local_begin:obj.local_end);
+else
+    error('kp:solvers:BadPhysicalStateSize', 'Received neither a local nor a full physical nodal state.');
+end
+end
+
+function requireMatchingNodes(lhs, rhs, label)
+if ~isequal(size(lhs), size(rhs)) || any(abs(lhs(:) - rhs(:)) > 1.0e-12)
+    error('kp:solvers:NodeLayoutMismatch', '%s requires matching nodal coordinates.', label);
+end
+end
+
+function transported = transportCoefficients(obj, t_start, coeff_state, num_steps, velocity, rk)
+if num_steps <= 0
+    error('kp:solvers:BadStepCount', 'PUSLFDAdvectionDiffusionSolver::transportCoefficients requires a positive step count.');
+end
 original_dt = obj.dt;
 horizon = num_steps * obj.dt;
 obj.advection.setStepSize(horizon);
 if obj.direction == "forward"
-    coeffs_next = obj.advection.forwardSLStep(t_start, state(:), velocity, rk);
+    coeffs_next = obj.advection.forwardSLStep(t_start, coeff_state, velocity, rk);
 else
-    coeffs_next = obj.advection.backwardSLStep(t_start, state(:), velocity, rk);
+    coeffs_next = obj.advection.backwardSLStep(t_start, coeff_state, velocity, rk);
 end
 obj.advection.setStepSize(original_dt);
-transported = coeffs_next(:);
-if obj.enforce_mass_constraint
-    transported = enforceMassTarget(obj, transported, massConstraintTarget(obj));
-end
+transported = coeffs_next;
+enforceCoefficientMassTargetIfNeeded(obj, transported);
 end
 
-function values = evaluateForcing(obj, forcing, t)
-X = obj.advection.getOutputNodes();
-try
-    values = forcing(obj.nu, t, X);
-catch
-    try
-        values = forcing(t, X);
-    catch
-        values = forcing(X);
-    end
+function out = evaluateSingleState(obj, coeffs)
+out = obj.advection.evaluateAtPoints(coeffs, obj.physical_nodes);
+if size(out, 2) ~= 1
+    error('kp:solvers:BadStateShape', 'Expected a single-column transported state.');
 end
-values = values(:);
+out = out(:, 1);
 end
 
-function initializeMassConstraintTarget(obj, reference_state)
+function out = massOfCoefficients(obj, coeffs)
+out = obj.advection.totalMass(coeffs, 1);
+end
+
+function initializeMassConstraintTarget(obj, reference_coeffs)
 if ~obj.enforce_mass_constraint || obj.has_explicit_mass_constraint_target
     return;
 end
-obj.mass_constraint_target = obj.totalMass(reference_state);
+obj.mass_constraint_target = massOfCoefficients(obj, reference_coeffs);
 end
 
 function target = massConstraintTarget(obj)
 target = obj.mass_constraint_target;
 end
 
-function corrected = enforceMassTarget(obj, state, target_mass)
-current_mass = obj.totalMass(state);
-alpha = (target_mass - current_mass) / max(obj.advection.getDomainMeasure(), 1.0e-14);
-corrected = state + alpha;
+function enforceCoefficientMassTargetIfNeeded(obj, coeffs)
+if ~obj.enforce_mass_constraint
+    return;
+end
+current_mass = massOfCoefficients(obj, coeffs);
+alpha = (massConstraintTarget(obj) - current_mass) / max(abs(obj.constant_mode_mass), 1.0e-14);
+coeffs(:, :) = coeffs + alpha * obj.constant_mode;
+end
+
+function coeffs = currentCoefficients(obj)
+if obj.completed_steps <= 0
+    coeffs = obj.coeff_nm2;
+elseif obj.completed_steps == 1
+    coeffs = obj.coeff_nm1;
+else
+    coeffs = obj.coeff_n;
+end
 end

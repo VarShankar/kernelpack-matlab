@@ -140,6 +140,18 @@ classdef DiffusionSolver < handle
             end
         end
 
+        function out = returnsDistributedState(~)
+            out = false;
+        end
+
+        function out = getOutputRange(obj)
+            out = [1, size(obj.X, 1)];
+        end
+
+        function out = getOutputNodes(obj)
+            out = obj.X;
+        end
+
         function out = bdf1Step(obj, t, forcing, NeuCoeffFunc, DirCoeffFunc, bc)
             if isempty(obj.cnm2)
                 error('kp:solvers:MissingInitialState', 'DiffusionSolver.bdf1Step requires setInitialState() first.');

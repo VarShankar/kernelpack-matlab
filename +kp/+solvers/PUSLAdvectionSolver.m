@@ -16,6 +16,7 @@ classdef PUSLAdvectionSolver < handle
         patch_stencil_props kp.rbffd.StencilProperties = kp.rbffd.StencilProperties()
         patch_stencils cell = {}
         domain_measure (1,1) double = 0
+        inflow_forward_fallback_reported (1,1) logical = false
         boundary_condition struct = struct('mode', "unspecified", 'normal_velocity_tolerance', 1.0e-10, 'periodic_patches', [], 'inflow_value', [])
     end
 
@@ -81,9 +82,13 @@ classdef PUSLAdvectionSolver < handle
             obj.output_nodes = obj.Domain.getIntBdryNodes();
             obj.output_range = [1, size(obj.output_nodes, 1)];
 
+            if obj.boundary_condition.mode == "periodic"
+                error('kp:solvers:PeriodicNotYetSupported', ...
+                    ['PUSL periodic advection is not yet supported robustly. ' ...
+                     'The localized PU basis still needs true periodic patch support, not just wrapped traces.']);
+            end
+
             h = obj.Domain.getSepRad();
-            % The PU-SL solver is driven by a patch covering of the
-            % physical node cloud rather than by one global interpolant.
             obj.patch_spacing = choosePatchSpacing(h, patch_spacing_factor);
             obj.patch_radius = choosePatchRadius(h, patch_radius_factor);
             obj.min_patch_nodes = chooseMinimumPatchNodes(size(obj.output_nodes, 2), xi);
@@ -100,53 +105,51 @@ classdef PUSLAdvectionSolver < handle
         end
 
         function coeffs = projectInitial(obj, rho0)
-            % The coefficient vector is just the nodal field sampled at the
-            % output nodes in this MATLAB mirror.
-            X = obj.output_nodes;
-            coeffs = zeros(size(X, 1), 1);
-            for i = 1:size(X, 1)
-                coeffs(i, 1) = rho0(X(i, :));
-            end
+            coeffs = obj.projectSamples(sampleScalarFunctionAtOutputNodes(obj, rho0));
         end
 
         function coeffs = projectConstant(obj, value, n_cols)
             if nargin < 3 || isempty(n_cols)
                 n_cols = 1;
             end
-            coeffs = value * ones(size(obj.output_nodes, 1), n_cols);
+            coeffs = obj.projectSamples(value * ones(size(obj.output_nodes, 1), n_cols));
         end
 
         function coeffs = projectSamples(~, nodal_samples)
             coeffs = nodal_samples;
         end
 
-        function values = evaluateAtNodes(~, coeffs)
-            values = coeffs;
+        function values = evaluateAtNodes(obj, coeffs)
+            values = obj.evaluateAtPoints(coeffs, obj.output_nodes);
         end
 
         function values = evaluateAtPoints(obj, coeffs, X)
-            % Evaluation at arbitrary points is done by localized PU
-            % reconstruction over the patch covering.
             values = localizedEvaluate(obj, coeffs, X);
         end
 
         function coeffs_next = backwardSLStep(obj, tn, coeffs_old, velocity, rk)
-            % Backward SL: trace departure points, evaluate there, then
-            % write the transported values back at the Eulerian nodes.
             X = obj.output_nodes;
             Xdep = tracePointsBackward(X, tn, obj.dt, velocity, rk);
-            values = localizedEvaluate(obj, coeffs_old, Xdep);
-            values = applyBoundaryCondition(obj, values, Xdep, tn + obj.dt, velocity);
-            coeffs_next = values;
+            coeffs_next = localizedEvaluate(obj, coeffs_old, Xdep);
+            coeffs_next = applyBoundaryCondition(obj, coeffs_next, Xdep, tn + obj.dt);
         end
 
         function coeffs_next = forwardSLStep(obj, tn, coeffs_old, velocity, rk)
-            % Forward SL is kept for parity with KernelPack, though the
-            % current verification work has focused on the backward path.
+            if obj.boundary_condition.mode == "inflow_dirichlet"
+                if ~obj.inflow_forward_fallback_reported
+                    warning('kp:solvers:ForwardInflowFallback', ...
+                        ['PUSLAdvectionSolver.forwardSLStep requested with inflow-Dirichlet advection BCs. ' ...
+                         'Falling back to the backward update because forward SL does not yet inject ' ...
+                         'the full boundary-in-time inflow data robustly.']);
+                    obj.inflow_forward_fallback_reported = true;
+                end
+                coeffs_next = obj.backwardSLStep(tn, coeffs_old, velocity, rk);
+                return;
+            end
+
             X = obj.output_nodes;
             Xarr = tracePointsForward(X, tn, obj.dt, velocity, rk);
-            coeffs_arr = coeffs_old;
-            values = localizedEvaluate(obj, coeffs_arr, Xarr);
+            values = localizedEvaluate(obj, coeffs_old, Xarr);
             coeffs_next = localizedEvaluate(obj, values, X);
         end
 
@@ -181,14 +184,22 @@ classdef PUSLAdvectionSolver < handle
             if nargin < 3 || isempty(col)
                 col = 1;
             end
-            values = coeffs(:, col);
-            out = obj.domain_measure * mean(values);
+            values = obj.evaluateAtNodes(coeffs);
+            out = obj.domain_measure * mean(values(:, col));
         end
 
         function out = getDomainMeasure(obj)
             out = obj.domain_measure;
         end
     end
+end
+
+function values = sampleScalarFunctionAtOutputNodes(obj, rho0)
+X = obj.output_nodes;
+values = zeros(size(X, 1), 1);
+for i = 1:size(X, 1)
+    values(i, 1) = rho0(X(i, :));
+end
 end
 
 function spacing = choosePatchSpacing(h, patch_spacing_factor)
@@ -227,8 +238,6 @@ end
 end
 
 function patch_node_ids = buildPatchNodeIds(domain, centers, radius, min_patch_nodes)
-% Make each PU patch robust by forcing a minimum node count, falling back
-% to KNN if the geometric ball query is too sparse.
 patch_node_ids = cell(size(centers, 1), 1);
 for p = 1:size(centers, 1)
     ids = domain.queryBall("interior_boundary", centers(p, :), radius);
@@ -287,8 +296,6 @@ weight_sum = zeros(nq, 1);
 sp = obj.patch_stencil_props;
 patch_ids_per_query = queryPatchIds(obj.patch_center_tree, obj.patch_centers, Xq, obj.patch_radius);
 
-% Evaluate every active patch contribution and blend them with compact
-% Wendland weights.
 for q = 1:size(Xq, 1)
     patch_ids = patch_ids_per_query{q};
     if isempty(patch_ids)
@@ -313,8 +320,6 @@ for q = 1:size(Xq, 1)
     weight_sum(q) = 1.0;
 end
 
-% If no patch contributes, fall back to the nearest nodal value so the
-% routine stays total over the query set.
 missing = weight_sum <= 1.0e-14;
 if any(missing)
     [idx, ~] = obj.Domain.queryKnn("interior_boundary", Xq(missing, :), 1);
@@ -386,7 +391,7 @@ K4 = velocity(t + dt, X4);
 Xnext = X + (dt / 6) * (K1 + 2 * K2 + 2 * K3 + K4);
 end
 
-function values = applyBoundaryCondition(obj, values, Xdep, tnext, ~)
+function values = applyBoundaryCondition(obj, values, Xdep, tnext)
 bc = obj.boundary_condition;
 if bc.mode == "unspecified" || bc.mode == "tangential"
     return;
