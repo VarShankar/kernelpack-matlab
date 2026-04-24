@@ -21,6 +21,9 @@ classdef PUSLAdvectionSolver < handle
         total_coeffs (1,1) double = 0
         constant_mode double = zeros(0, 1)
         fixed_collocation double = zeros(0, 0)
+        fixed_collocation_mass_augmented double = zeros(0, 0)
+        nodal_mass_weights double = zeros(0, 1)
+        local_constant_column double = zeros(0, 1)
         forward_cardinal_coeffs cell = {}
         domain_measure (1,1) double = 0
         inflow_forward_fallback_reported (1,1) logical = false
@@ -110,15 +113,17 @@ classdef PUSLAdvectionSolver < handle
             obj.coeff_offsets = buildCoeffOffsets(obj.patch_node_ids, obj.patch_stencil_props.npoly);
             obj.total_coeffs = obj.coeff_offsets(end) - 1;
 
+            [obj.constant_mode, obj.patch_mass_rows, obj.domain_measure] = precomputePatchMassData(obj);
             obj.forward_cardinal_coeffs = cell(size(obj.patch_node_ids));
             for p = 1:numel(obj.patch_node_ids)
                 nloc = numel(obj.patch_node_ids{p});
                 rhs = [eye(nloc); zeros(obj.patch_stencil_props.npoly, nloc)];
-                obj.forward_cardinal_coeffs{p} = stableSolve(obj.patch_stencils{p}.solve_lhs, rhs);
+                obj.forward_cardinal_coeffs{p} = solveWithStencilCPQR(obj.patch_stencils{p}, rhs);
             end
 
             obj.fixed_collocation = nodalEvaluationWeights(obj, obj.output_nodes);
-            [obj.constant_mode, obj.patch_mass_rows, obj.domain_measure] = precomputePatchMassData(obj);
+            [obj.fixed_collocation_mass_augmented, obj.nodal_mass_weights, obj.local_constant_column] = ...
+                buildForwardMassAugmentedData(obj);
             obj.solve_stats = defaultSolveStats();
         end
 
@@ -182,6 +187,18 @@ classdef PUSLAdvectionSolver < handle
         function coeffs_next = forwardSLStep(obj, tn, coeffs_old, velocity, rk)
             validateBoundaryConditionConfiguration(obj);
             bc = obj.boundary_condition;
+            if bc.mode == "inflow_dirichlet"
+                if ~obj.inflow_forward_fallback_reported
+                    warning('kp:solvers:ForwardInflowFallback', ...
+                        ['PUSLAdvectionSolver.forwardSLStep requested with inflow-Dirichlet advection BCs. ' ...
+                         'Falling back to the backward update because forward SL does not yet inject ' ...
+                         'the full boundary-in-time inflow data robustly.']);
+                    obj.inflow_forward_fallback_reported = true;
+                end
+                coeffs_next = obj.backwardSLStep(tn, coeffs_old, velocity, rk);
+                return;
+            end
+
             preserve_mass = bc.mode ~= "inflow_dirichlet";
             if bc.mode == "tangential"
                 validateTangentialBoundaryFlow(obj, tn, velocity);
@@ -242,14 +259,30 @@ classdef PUSLAdvectionSolver < handle
                 forward_values = traced_weights * nodal_current;
                 residual = rhs_local - forward_values;
                 if isempty(residual)
-                    break;
+                    resid_norm = 0.0;
+                else
+                    resid_norm = norm(residual, inf);
                 end
-                resid_norm = norm(residual, inf);
-                if resid_norm <= 1.0e-10
+                mass_resid_norm = 0.0;
+                mass_resid = [];
+                if preserve_mass
+                    current_mass = obj.nodal_mass_weights.' * nodal_current;
+                    mass_resid = target_mass - current_mass;
+                    if ~isempty(mass_resid)
+                        mass_resid_norm = norm(mass_resid, inf);
+                    end
+                end
+                if resid_norm <= 1.0e-10 && (~preserve_mass || mass_resid_norm <= 1.0e-12)
                     break;
                 end
 
-                delta = obj.fixed_collocation \ residual;
+                if preserve_mass
+                    rhs_aug = [residual; mass_resid];
+                    delta_aug = obj.fixed_collocation_mass_augmented \ rhs_aug;
+                    delta = delta_aug(1:size(obj.output_nodes, 1), :);
+                else
+                    delta = obj.fixed_collocation \ residual;
+                end
                 nodal_current = nodal_current + delta;
                 obj.solve_stats.defect_correction_solves = obj.solve_stats.defect_correction_solves + 1;
                 if iter == 1
@@ -887,12 +920,17 @@ for p = 1:numel(node_ids)
     solve_lhs(1:size(nodes, 1), 1:size(nodes, 1)) = phsRbf(r, sp.spline_degree);
     solve_lhs(1:size(nodes, 1), size(nodes, 1)+1:end) = P;
     solve_lhs(size(nodes, 1)+1:end, 1:size(nodes, 1)) = P.';
+    [Q, R, perm] = qr(solve_lhs, 'vector');
     stencils{p} = struct( ...
         'nodes', nodes, ...
         'centroid', centroid, ...
         'width', width, ...
         'poly_indices', poly_indices, ...
-        'solve_lhs', solve_lhs);
+        'solve_lhs', solve_lhs, ...
+        'Q', Q, ...
+        'R', R, ...
+        'perm', perm, ...
+        'rank', cpqrNumericalRank(R));
 end
 end
 
@@ -1039,11 +1077,11 @@ fixed_sites = isequal(size(sample_sites), size(Xnodes)) && norm(sample_sites - X
 
 if fixed_sites
     obj.solve_stats.fixed_site_solves = obj.solve_stats.fixed_site_solves + 1;
-    coeffs = stableSolve(stencil.solve_lhs, rhs);
+    coeffs = solveWithStencilCPQR(stencil, rhs);
     return;
 end
 
-coeffs = stableSolve(stencil.solve_lhs, rhs);
+coeffs = solveWithStencilCPQR(stencil, rhs);
 rhs_norm = max(norm(rhs, inf), 1.0);
 corrections_used = 0;
 prev_resid_norm = inf;
@@ -1058,11 +1096,11 @@ for iter = 1:4
         obj.solve_stats.residual_ratio_counts(iter - 1) = obj.solve_stats.residual_ratio_counts(iter - 1) + 1;
     end
     if iter > 1 && resid_norm > 0.7 * prev_resid_norm
-        coeffs = stableSolve(lhs, rhs);
+        coeffs = solveWithCPQROnTheFly(lhs, rhs);
         obj.solve_stats.moved_solves_fallback = obj.solve_stats.moved_solves_fallback + 1;
         return;
     end
-    delta = stableSolve(stencil.solve_lhs, resid);
+    delta = solveWithStencilCPQR(stencil, resid);
     coeffs = coeffs + delta;
     prev_resid_norm = resid_norm;
     corrections_used = corrections_used + 1;
@@ -1079,9 +1117,57 @@ if norm(final_resid, inf) <= 1.0e-8 * rhs_norm
         obj.solve_stats.moved_solves_two_defect = obj.solve_stats.moved_solves_two_defect + 1;
     end
 else
-    coeffs = stableSolve(lhs, rhs);
+    coeffs = solveWithCPQROnTheFly(lhs, rhs);
     obj.solve_stats.moved_solves_fallback = obj.solve_stats.moved_solves_fallback + 1;
 end
+end
+
+function rank = cpqrNumericalRank(R)
+if isempty(R)
+    rank = 0;
+    return;
+end
+diagR = abs(diag(R));
+if isempty(diagR) || ~(diagR(1) > 0)
+    rank = 0;
+    return;
+end
+tol = max(1.0e-12, 1.0e-10 * diagR(1));
+rank = find(diagR > tol, 1, 'last');
+if isempty(rank)
+    rank = 0;
+end
+end
+
+function X = solveWithStencilCPQR(stencil, rhs)
+X = solveWithCPQR(stencil.Q, stencil.R, stencil.perm, stencil.rank, rhs);
+if isempty(X)
+    X = stableSolve(stencil.solve_lhs, rhs);
+end
+end
+
+function X = solveWithCPQROnTheFly(lhs, rhs)
+[Q, R, perm] = qr(lhs, 'vector');
+rank = cpqrNumericalRank(R);
+X = solveWithCPQR(Q, R, perm, rank, rhs);
+if isempty(X)
+    X = stableSolve(lhs, rhs);
+end
+end
+
+function X = solveWithCPQR(Q, R, perm, rank, rhs)
+ncols = size(R, 2);
+X = zeros(ncols, size(rhs, 2));
+if rank == 0
+    return;
+end
+y = Q' * rhs;
+z = R(1:rank, 1:rank) \ y(1:rank, :);
+if any(~isfinite(z), 'all')
+    X = [];
+    return;
+end
+X(perm(1:rank), :) = z;
 end
 
 function basis = localBasisMatrix(stencil, sp, Xe)
@@ -1146,6 +1232,21 @@ for p = 1:numel(obj.patch_node_ids)
     patch_mass_rows{p} = mass_row;
     domain_measure = domain_measure + patch_measure;
 end
+end
+
+function [aug, nodal_mass_weights, local_constant_column] = buildForwardMassAugmentedData(obj)
+n = size(obj.output_nodes, 1);
+nodal_mass_weights = zeros(n, 1);
+for p = 1:numel(obj.patch_node_ids)
+    if isempty(obj.patch_mass_rows{p})
+        continue;
+    end
+    ids = obj.patch_node_ids{p};
+    local_weights = obj.forward_cardinal_coeffs{p}.' * obj.patch_mass_rows{p};
+    nodal_mass_weights(ids) = nodal_mass_weights(ids) + local_weights;
+end
+local_constant_column = sum(obj.fixed_collocation, 2);
+aug = [obj.fixed_collocation, local_constant_column; nodal_mass_weights.', 0];
 end
 
 function inside = isInsideDomain(obj, x)
@@ -1363,40 +1464,16 @@ end
 
 function hit = boundaryHitOnSegment(obj, inside_point, outside_point)
 phi = obj.Domain.getOuterLevelSet();
-ta = 0.0;
-tb = 1.0;
-xa = inside_point;
-xb = outside_point;
-fa = phi.Evaluate(xa);
-fb = phi.Evaluate(xb);
-if fa < 0
-    xa = outside_point;
-    xb = inside_point;
-    fa = fb;
-    fb = phi.Evaluate(xb);
-    ta = 1.0;
-    tb = 0.0;
+opts = struct('valueTolerance', 1.0e-12, ...
+    'stepTolerance', 1.0e-12, ...
+    'gradientTolerance', 1.0e-14, ...
+    'maxIterations', 30, ...
+    'maxStepNorm', inf);
+hit = phi.FindSegmentRootNewton(inside_point, outside_point, 0.5, opts);
+if ~hit.converged
+    error('kp:solvers:BoundaryTraceFailed', ...
+        'PUSL boundary tracing failed to locate a boundary hit on the level set.');
 end
-for iter = 1:30
-    tm = 0.5 * (ta + tb);
-    xm = (1 - tm) * inside_point + tm * outside_point;
-    fm = phi.Evaluate(xm);
-    if abs(fm) <= 1.0e-12 || abs(tb - ta) <= 1.0e-12
-        hit = struct('point', xm, 'parameter', tm);
-        return;
-    end
-    if fm < 0
-        tb = tm;
-        xb = xm; %#ok<NASGU>
-        fb = fm; %#ok<NASGU>
-    else
-        ta = tm;
-        xa = xm; %#ok<NASGU>
-        fa = fm; %#ok<NASGU>
-    end
-end
-tm = 0.5 * (ta + tb);
-hit = struct('point', (1 - tm) * inside_point + tm * outside_point, 'parameter', tm);
 end
 
 function bn = boundaryNormalVelocity(point, normal, time, velocity)

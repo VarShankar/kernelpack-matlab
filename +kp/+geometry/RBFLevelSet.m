@@ -145,6 +145,59 @@ classdef RBFLevelSet < handle
             result.converged(abs(result.levelSetValues) <= options.valueTolerance) = 1;
         end
 
+        function result = FindSegmentRootNewton(obj, insidePoint, outsidePoint, initialParameter, options)
+            if nargin < 4 || isempty(initialParameter)
+                initialParameter = 0.5;
+            end
+            if nargin < 5 || isempty(options)
+                options = struct();
+            end
+            options = obj.withNewtonDefaults(options);
+
+            dir = outsidePoint - insidePoint;
+            t = min(max(initialParameter, 0.0), 1.0);
+            x = insidePoint + t * dir;
+            phi = obj.Evaluate(x);
+            converged = false;
+            stalled = false;
+            iterations = 0;
+
+            for it = 1:options.maxIterations
+                iterations = it;
+                if abs(phi) <= options.valueTolerance
+                    converged = true;
+                    break;
+                end
+                grad = obj.EvaluateGradient(x);
+                dphi = grad * dir.';
+                if abs(dphi) <= options.gradientTolerance
+                    stalled = true;
+                    break;
+                end
+                dt = -phi / dphi;
+                if isfinite(options.maxStepNorm) && abs(dt) > options.maxStepNorm
+                    dt = sign(dt) * options.maxStepNorm;
+                end
+                tNew = min(max(t + dt, 0.0), 1.0);
+                x = insidePoint + tNew * dir;
+                phi = obj.Evaluate(x);
+                if abs(tNew - t) <= options.stepTolerance
+                    t = tNew;
+                    converged = abs(phi) <= options.valueTolerance;
+                    break;
+                end
+                t = tNew;
+            end
+
+            result = struct( ...
+                'point', x, ...
+                'parameter', t, ...
+                'value', phi, ...
+                'iterations', iterations, ...
+                'converged', converged, ...
+                'stalled', stalled);
+        end
+
         function flags = IsPointInSurface(obj, xe, tol)
             if nargin < 3
                 tol = 1e-3;
