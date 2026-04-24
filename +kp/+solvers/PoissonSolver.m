@@ -49,6 +49,8 @@ classdef PoissonSolver < handle
             obj.xi = xi;
             obj.num_omp_threads = num_omp_threads;
 
+            % The solver only needs one cached Laplacian; boundary rows are
+            % rebuilt per solve because the BC coefficients may change.
             obj.Domain.buildStructs();
             obj.X = obj.Domain.getIntBdryNodes();
             obj.Xb = obj.Domain.getBdryNodes();
@@ -81,6 +83,9 @@ classdef PoissonSolver < handle
             neuCoeff = evaluateNodeCallback(NeuCoeffFunc, obj.Xb, 'boundary coefficient');
             dirCoeff = evaluateNodeCallback(DirCoeffFunc, obj.Xb, 'boundary coefficient');
 
+            % Assemble the boundary operator for the requested BC mix, then
+            % pair it with the cached Laplacian in one square ghost-node
+            % system.
             bcAssembler = makeAssembler(obj.BCAssembler, obj.BCStencil);
             bcAssembler.AssembleOp(obj.Domain, 'bc', obj.BCStencilProperties, obj.BCOpProperties, ...
                 'NeuCoeff', neuCoeff, ...
@@ -89,6 +94,9 @@ classdef PoissonSolver < handle
 
             rhsTarget = evaluateNodeCallback(forcing, obj.X, 'forcing');
             rhsBoundary = evaluateBoundaryValues(bc, neuCoeff, dirCoeff, obj.nr, obj.Xb);
+            % Pure Neumann problems need the usual one-dimensional
+            % nullspace fix, so augment the system with a constant row and
+            % column when the Dirichlet coefficient is identically zero.
             pureNeumann = max(abs(dirCoeff)) <= 1e-13;
             obj.last_solve_used_nullspace_ = pureNeumann;
 
@@ -138,6 +146,8 @@ classdef PoissonSolver < handle
 end
 
 function sp = buildStencilProperties(domain, xi, theta, pointSet)
+% Translate a target convergence order into the local stencil settings
+% used by the RBF-FD layer.
 dim = domain.getDim();
 sp = kp.rbffd.StencilProperties();
 sp.dim = dim;
@@ -154,6 +164,8 @@ sp.pointSet = pointSet;
 end
 
 function assembler = makeAssembler(assemblerSpec, stencilSpec)
+% The solver stays "puzzle piece" simple by accepting either standard or
+% overlapped assemblers, and either RBF or WLS stencils.
 stencilFactory = resolveStencilFactory(stencilSpec);
 assemblerName = lower(string(assemblerSpec));
 switch assemblerName
@@ -199,6 +211,8 @@ end
 end
 
 function values = evaluateBoundaryValues(func, neuCoeff, dirCoeff, nr, Xb)
+% Accept either the full KernelPack-style boundary callback signature or a
+% simpler value-at-boundary callback.
 if isa(func, 'function_handle')
     try
         values = func(neuCoeff, dirCoeff, nr, Xb);
@@ -215,6 +229,8 @@ end
 end
 
 function A = buildSystemMatrix(L, BC, nCols, pureNeumann)
+% Rows are always physical PDE rows followed by boundary rows. Pure
+% Neumann solves append one scalar compatibility constraint.
 A = [-L; BC];
 if pureNeumann
     A = [A, ones(size(A, 1), 1); ones(1, nCols), 0];

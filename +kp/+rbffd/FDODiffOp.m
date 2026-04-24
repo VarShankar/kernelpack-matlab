@@ -27,6 +27,8 @@ classdef FDODiffOp < handle
             parser.parse(varargin{:});
             opts = parser.Results;
 
+            % Start from the same center cloud as standard RBF-FD, but let
+            % one accepted stencil row serve several nearby rows.
             [centerPoints, centerRowIds, centerColGlobals, centerNormals] = pickCenters(domain, stProps.pointSet);
             stencilPoints = domain.getTreePoints(stProps.treeMode);
             stencilGlobals = domain.getTreeGlobals(stProps.treeMode);
@@ -54,6 +56,8 @@ classdef FDODiffOp < handle
             obj.recorded_stencil_centers = {};
             obj.recorded_stencil_globals = zeros(0, 1);
 
+            % Greedily accept overlapped rows until every requested row has
+            % been covered by some accepted stencil.
             while any(activeSet)
                 localCenter = find(activeSet, 1, 'first');
                 centerPoint = centerPoints(localCenter, :);
@@ -91,6 +95,8 @@ classdef FDODiffOp < handle
                         native(j) = sum(abs(W(:, j)).^2);
                     end
                 end
+                % The center row defines the acceptance thresholds for the
+                % other candidate rows harvested from the same stencil.
                 leb0 = lebesgue(1);
                 nat0 = native(1);
 

@@ -1,6 +1,8 @@
 function mip_package_checks()
 %MIP_PACKAGE_CHECKS Fast package check for MIP installs.
 
+% Build one small geometry-backed domain so the package check exercises the
+% geometry, node generation, assembly, and solver layers together.
 domain = create_disk_domain(0.18);
 
 sp = kp.rbffd.StencilProperties.fromAccuracy( ...
@@ -11,12 +13,15 @@ sp = kp.rbffd.StencilProperties.fromAccuracy( ...
     'treeMode', 'all', ...
     'pointSet', 'interior_boundary');
 
+% First verify that the package can assemble a basic RBF-FD Laplacian.
 assembler = kp.rbffd.FDDiffOp(@() kp.rbffd.RBFStencil());
 assembler.AssembleOp(domain, 'lap', sp, kp.rbffd.OpProperties());
 L = assembler.getOp();
 assert(~isempty(L) && size(L, 2) == domain.getNumTotalNodes(), ...
     'RBF-FD assembly failed in the MIP package check.');
 
+% Then solve one small Poisson problem so a MIP install checks the full
+% PDE workflow rather than just the path setup.
 solver = kp.solvers.PoissonSolver( ...
     'LapAssembler', 'fd', ...
     'BCAssembler', 'fd', ...

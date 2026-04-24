@@ -36,6 +36,9 @@ classdef WeightedLeastSquaresStencil < handle
             obj.basis = kp.poly.PolynomialBasis.fromTotalDegree(obj.s_dim, obj.fit_ell, ...
                 'Family', 'legendre', 'Center', zeros(1, obj.s_dim), 'Scale', 1);
 
+            % The WLS stencil works purely in the polynomial space, with a
+            % diagonal radial weighting that biases the fit toward the
+            % center of the stencil.
             P = obj.basis.evaluate(obj.Xc, zeros(1, obj.s_dim), true);
             obj.node_weights = exp(-4 * r2 / (obj.width^2));
             obj.node_weights = min(max(obj.node_weights, 1e-10), 1);
@@ -43,6 +46,9 @@ classdef WeightedLeastSquaresStencil < handle
             weighted_P = P .* sqrtw;
             weighted_identity = diag(sqrtw);
             gram = weighted_P.' * weighted_P;
+            % Prefer a direct weighted least-squares solve when the Gram
+            % matrix is healthy, but fall back to a pseudoinverse when the
+            % fit is rank-deficient or poorly scaled.
             if rank(weighted_P) < obj.fit_npoly || rcond(gram) < 1e-12
                 obj.reconstructor = pinv(weighted_P) * weighted_identity;
             else
@@ -78,6 +84,8 @@ classdef WeightedLeastSquaresStencil < handle
             if nargin < 5
                 cache_flag = true;
             end
+            % Cache the polynomial coefficients when the same local field
+            % is queried repeatedly.
             if ~obj.coeffs_already_computed
                 obj.coeffs = obj.reconstructor * f;
                 if cache_flag
@@ -93,6 +101,8 @@ classdef WeightedLeastSquaresStencil < handle
             for row = 1:size(Xe, 1)
                 r2 = sum((obj.x_stencil - Xe(row, :)).^2, 2);
                 [minr, nearest] = min(r2);
+                % Exact stencil-node evaluation should reproduce the data
+                % value directly instead of going through the fit.
                 if sqrt(minr) <= 1e-12 * max(obj.width, 1)
                     weights(row, nearest) = 1;
                     continue;
@@ -135,6 +145,8 @@ classdef WeightedLeastSquaresStencil < handle
         function out = getReconstructor(obj), out = obj.reconstructor; end
 
         function B = LapOp(obj, ~, ~, ~, ~, ~, X_at_origin_subset, ~)
+            % All WLS differential operators are derivatives of the local
+            % polynomial basis, then projected back to nodal weights.
             total = zeros(size(X_at_origin_subset, 1), obj.fit_npoly);
             for d = 1:obj.s_dim
                 dd = zeros(1, obj.s_dim);

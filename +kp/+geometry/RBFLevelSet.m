@@ -44,6 +44,9 @@ classdef RBFLevelSet < handle
             obj.nrd = kp.geometry.normalizeRows(nr);
             obj.ls_xd = zeros(obj.n, 1);
 
+            % Build a signed offset cloud around the boundary and fit a
+            % scalar RBF interpolant through zero, inside, and outside
+            % level-set values.
             sep = obj.estimateOffsetDistance(x);
             insidePts = x - sep * obj.nrd;
             outsidePts = x + sep * obj.nrd;
@@ -70,6 +73,8 @@ classdef RBFLevelSet < handle
         end
 
         function grad = EvaluateGradient(obj, xe)
+            % Differentiate the fitted scalar field analytically by
+            % differentiating the radial kernel.
             nPts = size(xe, 1);
             grad = zeros(nPts, obj.dim);
             R = kp.geometry.distanceMatrix(xe, obj.Centers);
@@ -97,6 +102,8 @@ classdef RBFLevelSet < handle
                 'converged', zeros(size(x, 1), 1), ...
                 'stalled', zeros(size(x, 1), 1));
 
+            % Use a simple Newton projection onto the implicit surface,
+            % tracking both stalled points and converged points.
             for it = 1:options.maxIterations
                 active = (result.converged == 0) & (result.stalled == 0);
                 if ~any(active)
@@ -164,6 +171,8 @@ classdef RBFLevelSet < handle
 
     methods (Access = private)
         function sep = estimateOffsetDistance(~, x)
+            % Pick an offset distance from the nearest-neighbor spacing so
+            % the inside/outside cloud scales with the data cloud.
             if size(x, 1) < 2
                 sep = 1e-2;
                 return;

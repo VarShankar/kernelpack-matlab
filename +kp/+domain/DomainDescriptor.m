@@ -18,6 +18,8 @@ classdef DomainDescriptor < handle
 
     methods
         function setNodes(obj, int_nodes, bdry_nodes, ghost_nodes)
+            % Store the three node classes separately, then rebuild the
+            % packed node views that the assemblers query later.
             if nargin < 4 || isempty(ghost_nodes)
                 ghost_nodes = zeros(0, size(int_nodes, 2));
             end
@@ -28,6 +30,8 @@ classdef DomainDescriptor < handle
         end
 
         function setNormals(obj, nrmls)
+            % Boundary normals must stay aligned with Xb because boundary
+            % operators index into those two arrays row-for-row.
             if size(nrmls, 1) ~= size(obj.Xb, 1)
                 error('kp:domain:BadNormals', 'Boundary normals must match the number of boundary nodes.');
             end
@@ -48,6 +52,8 @@ classdef DomainDescriptor < handle
         end
 
         function buildStructs(obj)
+            % Build the three search layers that mirror the C++ split:
+            % all nodes, interior+boundary nodes, and boundary nodes.
             obj.buildTallTree();
             obj.buildIntBdryTree();
             obj.buildBdryTree();
@@ -76,6 +82,8 @@ classdef DomainDescriptor < handle
 
             k = min(k, size(points, 1));
             if tree.HasSearcher
+                % Prefer the KD-tree path when MATLAB has it, but keep a
+                % deterministic dense fallback when that toolbox is absent.
                 [indices, distances] = knnsearch(tree.Searcher, queryPoints, 'K', k);
                 if isvector(indices)
                     indices = reshape(indices, size(queryPoints, 1), []);
@@ -104,6 +112,8 @@ classdef DomainDescriptor < handle
                 return;
             end
 
+            % The fallback path reproduces the same query contract using a
+            % dense distance matrix and explicit masking.
             d = kp.geometry.distanceMatrix(queryPoints, points);
             indices = cell(size(queryPoints, 1), 1);
             distances = cell(size(queryPoints, 1), 1);
@@ -154,6 +164,8 @@ classdef DomainDescriptor < handle
 
     methods (Access = private)
         function setTotalNodes(obj)
+            % Keep the packed node views synchronized with the separated
+            % Xi/Xb/Xg storage expected by the solvers.
             if isempty(obj.Xi)
                 dim = size(obj.Xb, 2);
             else
@@ -167,6 +179,8 @@ classdef DomainDescriptor < handle
         end
 
         function [tree, points] = getTreeData(obj, treeMode)
+            % Tree mode names are the semantic MATLAB replacement for the
+            % old integer tree selectors in KernelPack C++.
             switch treeMode
                 case "all"
                     tree = obj.tallTree;
@@ -187,6 +201,8 @@ classdef DomainDescriptor < handle
             if isempty(points)
                 return;
             end
+            % A missing KD-tree toolbox should slow us down, not break the
+            % assembly pipeline.
             if exist('KDTreeSearcher', 'class') == 8 && exist('knnsearch', 'file') == 2
                 tree.Searcher = KDTreeSearcher(points);
                 tree.HasSearcher = true;

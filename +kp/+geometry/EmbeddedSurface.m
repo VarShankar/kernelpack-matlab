@@ -58,11 +58,17 @@ classdef EmbeddedSurface < handle
             obj.Nd = min(Nb, size(obj.data_sites, 1));
             obj.surf_dim = dim - 1;
 
+            % KernelPack builds a smooth parametric model from the raw
+            % data sites first, then derives sample sites, tangents, and
+            % normals from that model.
             dataSites = obj.data_sites(1:obj.Nd, :);
             degree = 7;
             Ntarget = obj.estimateEvaluationCount(dim, rad, true, Ne);
 
             if dim == 2
+                % Closed curves use a periodic SBF fit on a chord-length
+                % parameter. This is the path that drives the smooth 2D
+                % boundary sampling used elsewhere in the package.
                 t = kp.geometry.chordLengthParam(dataSites, true);
                 theta = 2 * pi * t;
                 [r, ~] = kp.geometry.periodicChordDistance(theta, theta);
@@ -79,6 +85,8 @@ classdef EmbeddedSurface < handle
                 obj.data_site_nrmls = dn;
 
                 if method == 1
+                    % Oversample the curve, then resample by arc length to
+                    % get a cleaner spacing-controlled boundary cloud.
                     Ns = max(round(supersample_fac * 1.5 * Ntarget), Ntarget);
                     ts = linspace(0, 1, Ns + 1).';
                     ts = ts(1:end-1);
@@ -105,6 +113,9 @@ classdef EmbeddedSurface < handle
                     obj.uniform_Nrmls = obj.Nrmls;
                 end
             elseif dim == 3
+                % Smooth closed surfaces are fit coordinate-wise on the
+                % sphere, then sampled from a Fibonacci sphere parameter
+                % cloud before optional thinning.
                 center = mean(dataSites, 1);
                 local = dataSites - center;
                 uvw = kp.geometry.cart2sphRows(local);
@@ -132,6 +143,8 @@ classdef EmbeddedSurface < handle
                 ptss = obj.evalClosedSurface(uvEval);
                 [tan1S, tan2S, nrmlS] = obj.evalClosedSurfaceFrame(uvEval);
                 if method == 1
+                    % The 3D path still uses sample thinning after a
+                    % supersampled surface evaluation.
                     keep = kp.geometry.weightedSampleEliminationMIS(ptss, rad);
                     if nnz(keep) < max(8, floor(Ntarget / 2))
                         keep = false(size(ptss, 1), 1);
@@ -176,11 +189,15 @@ classdef EmbeddedSurface < handle
             obj.Nd = min(Nb, size(obj.data_sites, 1));
             obj.surf_dim = dim - 1;
 
+            % Open segments and patches are treated as local chart models
+            % rather than periodic closed objects.
             dataSites = obj.data_sites(1:obj.Nd, :);
             degree = 7;
             Ntarget = obj.estimateEvaluationCount(dim, rad, false, Ne);
 
             if dim == 2
+                % Open 2D segments are fit on a 1D parameter line with a
+                % polynomial augmentation for stable derivative recovery.
                 u = kp.geometry.chordLengthParam(dataSites, false);
                 K = kp.geometry.phsKernel(kp.geometry.distanceMatrix(u, u), degree);
                 P = [ones(numel(u), 1), u];
@@ -198,6 +215,9 @@ classdef EmbeddedSurface < handle
                 obj.data_site_nrmls = dn;
 
                 if method == 1
+                    % The open-curve path still uses geometric thinning on
+                    % the supersampled cloud instead of arc-length
+                    % redistribution.
                     Ns = max(round(supersample_fac * 1.5 * Ntarget), Ntarget);
                     us = linspace(0, 1, Ns).';
                     ptss = obj.evalOpenCurve(us);
@@ -220,6 +240,8 @@ classdef EmbeddedSurface < handle
                     obj.uniform_Nrmls = obj.Nrmls;
                 end
             elseif dim == 3
+                % Open 3D patches are parameterized on a best-fit plane and
+                % then fit with an RBF patch model in that local chart.
                 uv = kp.geometry.buildPlanarParametricNodes2D(dataSites, obj.Nd, 0, 1);
                 K = kp.geometry.phsKernel(kp.geometry.distanceMatrix(uv, uv), degree);
                 P = [ones(size(uv, 1), 1), uv];
@@ -267,6 +289,8 @@ classdef EmbeddedSurface < handle
         end
 
         function buildLevelSetFromGeometricModel(obj, lambda)
+            % Build the implicit representation from whichever boundary
+            % cloud is currently regarded as the uniform geometric model.
             if nargin < 2 || isempty(lambda)
                 pts = obj.uniform_sample_sites;
                 nrmls = obj.uniform_Nrmls;
@@ -300,6 +324,8 @@ classdef EmbeddedSurface < handle
         end
 
         function computeExtendedBoundingBox(obj, h)
+            % The extended box is built from a thickened copy in the normal
+            % direction, mirroring the C++ "thick copy" idea.
             obj.thick_copy = obj.uniform_sample_sites + h * obj.uniform_Nrmls;
             obj.thick_tree = struct('Points', obj.thick_copy);
             obj.ebox = kp.geometry.pcaOrientedBoundingBox(obj.thick_copy);
@@ -391,6 +417,8 @@ classdef EmbeddedSurface < handle
 
     methods (Access = private)
         function x = evalClosedCurve(obj, t)
+            % Evaluate the periodic closed-curve fit at arbitrary
+            % parameter locations in [0,1).
             tw = kp.geometry.wrapPeriodicParameter(t(:));
             theta = 2 * pi * tw;
             [r, ~] = kp.geometry.periodicChordDistance(theta, obj.geom_model.theta);
@@ -399,6 +427,8 @@ classdef EmbeddedSurface < handle
         end
 
         function [xt, n] = evalClosedCurveFrame(obj, t)
+            % Recover the tangent and outward normal from the first
+            % derivative of the periodic curve model.
             tw = kp.geometry.wrapPeriodicParameter(t(:));
             theta = 2 * pi * tw;
             [r, delta] = kp.geometry.periodicChordDistance(theta, obj.geom_model.theta);
@@ -415,12 +445,16 @@ classdef EmbeddedSurface < handle
         end
 
         function x = evalOpenCurve(obj, u)
+            % Evaluate the open-curve RBF chart at arbitrary parameter
+            % locations on the unit interval.
             u = min(max(u(:), 0), 1);
             K = kp.geometry.phsKernel(kp.geometry.distanceMatrix(u, obj.geom_model.u), obj.geom_model.degree);
             x = K * obj.geom_model.rbfWeights + [ones(size(u, 1), 1), u] * obj.geom_model.polyCoeffs;
         end
 
         function [xt, n] = evalOpenCurveFrame(obj, u)
+            % Differentiate the open curve model directly and rotate the
+            % tangent to get a consistent outward normal.
             u = min(max(u(:), 0), 1);
             du = u - obj.geom_model.u.';
             r = abs(du);
@@ -436,6 +470,7 @@ classdef EmbeddedSurface < handle
         end
 
         function x = evalClosedSurface(obj, uv)
+            % Evaluate the smooth closed surface from the spherical chart.
             unitQuery = [cos(uv(:, 2)) .* cos(uv(:, 1)), ...
                          cos(uv(:, 2)) .* sin(uv(:, 1)), ...
                          sin(uv(:, 2))];
@@ -445,6 +480,8 @@ classdef EmbeddedSurface < handle
         end
 
         function [tu, tv, n] = evalClosedSurfaceFrame(obj, uv)
+            % Use chart derivatives in the two angular directions to
+            % recover tangent vectors and normals on the smooth surface.
             h = obj.tangent_step;
             uvUp = uv; uvUm = uv;
             uvUp(:, 1) = uv(:, 1) + h;
@@ -464,11 +501,14 @@ classdef EmbeddedSurface < handle
         end
 
         function x = evalOpenSurface(obj, uv)
+            % Evaluate the local open surface patch in its planar chart.
             K = kp.geometry.phsKernel(kp.geometry.distanceMatrix(uv, obj.geom_model.uv), obj.geom_model.degree);
             x = K * obj.geom_model.rbfWeights + [ones(size(uv, 1), 1), uv] * obj.geom_model.polyCoeffs;
         end
 
         function [tu, tv, n] = evalOpenSurfaceFrame(obj, uv)
+            % Differentiate the patch chart with respect to its two local
+            % parameters, then take the cross product for normals.
             diffU = uv(:, 1) - obj.geom_model.uv(:, 1).';
             diffV = uv(:, 2) - obj.geom_model.uv(:, 2).';
             r = sqrt(diffU.^2 + diffV.^2);

@@ -22,6 +22,9 @@ classdef PolynomialBasis < handle
                 indexSet = zeros(1, 1);
             end
 
+            % The basis object stores both the polynomial family and the
+            % geometric normalization that maps a local stencil into a
+            % unit-sized computational patch.
             parser = inputParser();
             parser.addRequired('indexSet', @(x) validateattributes(x, {'numeric'}, {'2d', 'nonnegative', 'integer'}));
             parser.addParameter('Family', 'legendre', @(x) any(strcmpi(x, {'legendre', 'jacobi', 'chebyshev'})));
@@ -66,6 +69,8 @@ classdef PolynomialBasis < handle
         end
 
         function fitNormalizationFromPoints(obj, X)
+            % Fit a simple center-and-radius normalization directly from a
+            % point cloud so local polynomial work happens on O(1) scales.
             validateattributes(X, {'numeric'}, {'2d', 'finite', 'real', 'ncols', obj.Dimension});
             center = mean(X, 1);
             shifted = X - center;
@@ -95,16 +100,22 @@ classdef PolynomialBasis < handle
             if nargin < 4
                 assumeNormalized = false;
             end
+            % Callers can either provide already-normalized coordinates or
+            % let the basis object do the shift-and-scale internally.
             if assumeNormalized
                 Xwork = X;
             else
                 Xwork = obj.normalizePoints(X);
             end
 
+            % The actual basis evaluation is delegated to the shared
+            % Jacobi/Chebyshev tensor-product machinery.
             recurrence = @(N) obj.getRecurrence(N);
             p = kp.poly.mpoly_eval(Xwork, obj.IndexSet, recurrence, d);
 
             if any(d(:) > 0)
+                % Derivatives in normalized coordinates need the usual
+                % chain-rule correction back to the physical scale.
                 totalOrder = sum(d, 2);
                 for q = 1:numel(totalOrder)
                     p(:, :, q) = p(:, :, q) / (obj.Scale^totalOrder(q));

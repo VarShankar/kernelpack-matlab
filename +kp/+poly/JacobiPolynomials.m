@@ -13,6 +13,8 @@ classdef JacobiPolynomials
             a = (bet^2 - alph^2) * ones(size(n));
             b = ones(size(n));
 
+            % The first two recurrence entries have special closed forms;
+            % higher orders use the standard general Jacobi recurrence.
             flags0 = (n == 0);
             if any(flags0)
                 a(flags0) = (bet - alph) / (alph + bet + 2);
@@ -55,6 +57,7 @@ classdef JacobiPolynomials
             p = zeros(nx, N + 1);
             xf = x(:);
 
+            % First build the orthonormal polynomial table itself.
             p(:, 1) = ones(nx, 1) / sqrt(b(1));
             if N > 0
                 p(:, 2) = ((xf - a(1)) .* p(:, 1)) / sqrt(b(2));
@@ -69,6 +72,7 @@ classdef JacobiPolynomials
                 return;
             end
 
+            % Then differentiate recursively as many times as requested.
             for qd = 1:d
                 pd = zeros(size(p));
                 for q = qd:N
@@ -100,6 +104,8 @@ classdef JacobiPolynomials
             p = ones(m, n, pcount) / sqrt(b(1)^dim);
             activeAlpha = alpha > 0;
 
+            % Evaluate one dimension at a time and accumulate the tensor
+            % product factors into the final multivariate table.
             for qd = 1:pcount
                 for qdim = 1:dim
                     temp = kp.poly.JacobiPolynomials.evaluate(a, b, x(:, qdim), ...

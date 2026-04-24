@@ -27,6 +27,8 @@ classdef FDDiffOp < handle
             parser.parse(varargin{:});
             opts = parser.Results;
 
+            % Pick the row centers first, then query the chosen tree for
+            % each local stencil neighborhood.
             [centerPoints, centerRowIds, centerColGlobals, centerNormals] = pickCenters(domain, stProps.pointSet);
             activeRows = opts.ActiveRows(:);
             if isempty(activeRows)
@@ -49,6 +51,8 @@ classdef FDDiffOp < handle
                     'Boundary coefficients must align with the chosen center cloud.');
             end
 
+            % Every requested row is independent, so standard RBF-FD
+            % assembly parallelizes naturally over centers.
             useParallel = opProps.UseParallel && license('test', 'Distrib_Computing_Toolbox') && nrows > 8;
             if useParallel
                 parfor k = 1:nrows
@@ -65,6 +69,8 @@ classdef FDDiffOp < handle
                 end
             end
 
+            % Store the result as triplets first; the public operator is
+            % materialized as a sparse matrix on demand.
             tripletCount = sum(cellfun(@numel, allIndices));
             obj.locations = zeros(tripletCount, 2);
             obj.values = zeros(tripletCount, 1);

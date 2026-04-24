@@ -32,6 +32,8 @@ classdef RBFStencil < handle
             obj.ell = sp.ell;
             obj.npoly = sp.npoly;
 
+            % Shift and scale the stencil first so the polynomial block is
+            % built on a numerically tame local coordinate system.
             r = kp.geometry.distanceMatrix(X, X);
             obj.width = max(max(r, [], 'all'), 1);
             obj.Xm = mean(X, 1);
@@ -40,6 +42,9 @@ classdef RBFStencil < handle
                 'Family', 'legendre', 'Center', zeros(1, obj.s_dim), 'Scale', 1);
 
             P = obj.basis.evaluate(obj.Xc, zeros(1, obj.s_dim), true);
+            % Assemble the standard augmented PHS+polynomial saddle-point
+            % system used to recover interpolation and differentiation
+            % weights.
             obj.A = zeros(obj.n + obj.npoly, obj.n + obj.npoly);
             obj.A(1:obj.n, 1:obj.n) = kp.rbffd.RBFStencil.phsRbf(r, sp.spline_degree);
             obj.A(1:obj.n, obj.n+1:end) = P;
@@ -80,6 +85,8 @@ classdef RBFStencil < handle
             Ae = [kp.rbffd.RBFStencil.phsRbf(re, sp.spline_degree), Pe];
 
             f_padded = [f; zeros(obj.npoly, size(f, 2))];
+            % Solving once and caching the interpolation coefficients is
+            % useful when the same stencil is evaluated at many points.
             if ~obj.coeffs_already_computed
                 obj.coeffs = kp.rbffd.RBFStencil.stableSolve(obj.solve_lhs, f_padded);
                 if cache_flag
@@ -98,6 +105,8 @@ classdef RBFStencil < handle
             Xec = (Xe - obj.Xm) / obj.width;
             Pe = obj.basis.evaluate(Xec, zeros(1, obj.s_dim), true);
             Rt = [kp.rbffd.RBFStencil.phsRbf(re, sp.spline_degree), Pe].';
+            % Weight evaluation is just the transposed interpolation
+            % problem with point-evaluation right-hand sides.
             lagrange = kp.rbffd.RBFStencil.stableSolve(obj.solve_lhs, Rt);
             weights = lagrange(1:obj.n, :).';
         end
@@ -150,6 +159,8 @@ classdef RBFStencil < handle
         function out = getNPoly(obj), out = obj.npoly; end
 
         function B = LapOp(obj, sp, ~, r_rhs, ~, ~, X_at_origin_subset, ~)
+            % Build the augmented right-hand side for Laplacian weights:
+            % radial-kernel Laplacian plus polynomial second derivatives.
             Bpoly = zeros(obj.npoly, size(X_at_origin_subset, 1));
             for d = 1:obj.s_dim
                 dd = zeros(1, obj.s_dim);
@@ -160,6 +171,8 @@ classdef RBFStencil < handle
         end
 
         function B = GradOp(obj, sp, op, r_rhs, X_subset, X, X_at_origin_subset, ~)
+            % Gradient weights use the selected coordinate derivative on
+            % both the kernel and polynomial blocks.
             dim = op.selectdim + 1;
             diff = X_subset(:, dim) - X(:, dim).';
             Bpoly = obj.basis.evaluate(X_at_origin_subset, unitMultiIndex(obj.s_dim, dim), true).' / obj.width;
@@ -167,6 +180,8 @@ classdef RBFStencil < handle
         end
 
         function B = BCOp(obj, sp, op, NeuCoeff, DirCoeff, r_rhs, X_subset, X, X_at_origin_subset, ~, nr_subset)
+            % Boundary rows are just the requested Neumann and Dirichlet
+            % pieces superposed in one local augmented system.
             total = zeros(obj.n + obj.npoly, size(X_at_origin_subset, 1));
             if NeuCoeff ~= 0
                 for d = 1:obj.s_dim
@@ -201,6 +216,8 @@ classdef RBFStencil < handle
             r = kp.geometry.distanceMatrix(X, X);
             r_rhs = r(rhs_inds, :);
             B = obj.applyOperator(ApplyOp, sp, op, r_rhs, X_subset, X, X_at_origin_subset, obj.Xc);
+            % Some callers want the assembled right-hand side directly; the
+            % normal path solves and then keeps only the nodal weights.
             if op.nosolve
                 W = B;
             else
@@ -221,6 +238,8 @@ classdef RBFStencil < handle
             r = kp.geometry.distanceMatrix(X, X);
             r_rhs = r(rhs_inds, :);
             B = obj.applyBoundaryOperator(ApplyOp, sp, op, NeuCoeff, DirCoeff, r_rhs, X_subset, X, X_at_origin_subset, obj.Xc, nr_subset);
+            % Boundary operators always solve the local augmented system,
+            % because the coefficients live in the BC definition itself.
             Wfull = kp.rbffd.RBFStencil.stableSolve(obj.solve_lhs, B);
             W = Wfull(1:obj.n, :);
             if isscalar(rhs_indices) && rhs_indices(1) == 1

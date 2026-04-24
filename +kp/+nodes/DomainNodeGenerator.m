@@ -15,6 +15,8 @@ classdef DomainNodeGenerator < handle
 
     methods
         function generatePoissonNodes(obj, radius, x_min, x_max, varargin)
+            % Box-only generation is the lowest-level entry point; no
+            % geometry clipping or boundary bookkeeping happens here.
             [X, info] = kp.nodes.generatePoissonNodesInBox(radius, x_min, x_max, varargin{:});
             obj.Xi = X;
             obj.Xb = zeros(0, size(X, 2));
@@ -38,8 +40,11 @@ classdef DomainNodeGenerator < handle
             localOpts = parser.Results;
             samplerArgs = namedArgsToCell(parser.Unmatched);
 
-            [boundaryNodes, boundaryNormals, boundaryLevelSet] = buildBoundaryState(geometry);
+            [boundaryNodes, ~, boundaryLevelSet] = buildBoundaryState(geometry);
             [x_min, x_max] = kp.nodes.boundingBoxExtents(geometry, true);
+            % Choose between fixed-radius and variable-radius sampling, but
+            % always thread the geometry-aware refinement options through
+            % the same sampler call.
             if isempty(localOpts.RadiusFunction)
                 samplerInput = radius;
                 samplerArgs = [samplerArgs, {'MinRadius', radius}];
@@ -66,6 +71,8 @@ classdef DomainNodeGenerator < handle
             obj.s_dim = size(Xraw, 2);
             obj.last_info = info;
 
+            % KernelPack-style clipping keeps a clearance band relative to
+            % the smallest active spacing near the boundary.
             clearance = localOpts.OuterFractionOfh * radius;
             obj.clipToGeometry(geometry, 'Keep', 'inside', 'BoundaryClearance', clearance);
             obj.last_info.min_active_radius = clearance;
@@ -89,6 +96,9 @@ classdef DomainNodeGenerator < handle
         end
 
         function descriptor = buildDomainDescriptorFromGeometry(obj, geometry, radius, varargin)
+            % This is the high-level path: generate interior nodes, pull
+            % boundary nodes from the geometry object, then append ghost
+            % nodes in the outward normal direction.
             obj.generateInteriorNodesFromGeometry(geometry, radius, varargin{:});
             [boundaryNodes, boundaryNormals, boundaryLevelSet] = buildBoundaryState(geometry);
             ghostNodes = boundaryNodes + 0.5 * radius * boundaryNormals;
@@ -147,6 +157,8 @@ function args = namedArgsToCell(s)
 end
 
 function [Xb, Nrmls, levelSet] = buildBoundaryState(geometry)
+% Accept either EmbeddedSurface-style or piecewise geometry-style
+% interfaces and normalize them to one boundary cloud contract.
     if ismethod(geometry, 'getUniformBdryNodes')
         Xb = geometry.getUniformBdryNodes();
         Nrmls = geometry.getUniformBdryNrmls();

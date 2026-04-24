@@ -60,6 +60,8 @@ classdef DiffusionSolver < handle
             obj.nu = d_coeff;
             obj.num_omp_threads = num_omp_threads;
 
+            % The diffusion solver caches the spatial operators once, then
+            % reuses them across BDF steps.
             obj.Domain.buildStructs();
             obj.X = obj.Domain.getIntBdryNodes();
             obj.Xb = obj.Domain.getBdryNodes();
@@ -106,6 +108,8 @@ classdef DiffusionSolver < handle
         end
 
         function setStateHistory(obj, varargin)
+            % Accept one, two, or three physical states so callers can
+            % start directly at BDF1, BDF2, or BDF3.
             switch numel(varargin)
                 case 1
                     obj.setInitialState(varargin{1});
@@ -141,6 +145,8 @@ classdef DiffusionSolver < handle
                 error('kp:solvers:MissingInitialState', 'DiffusionSolver.bdf1Step requires setInitialState() first.');
             end
             previous = obj.currentPhysicalState();
+            % BDF1 is just backward Euler written in the same operator
+            % language as the higher-order steps.
             rhsPhysical = previous + obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -obj.nu * obj.dt);
         end
@@ -149,6 +155,8 @@ classdef DiffusionSolver < handle
             if obj.completed_steps_ < 1
                 error('kp:solvers:MissingStateHistory', 'DiffusionSolver.bdf2Step requires one prior step in the state history.');
             end
+            % BDF2 reuses the same implicit solve shape with the usual
+            % two-step coefficients on the right-hand side.
             rhsPhysical = (4/3) * obj.cnm1 - (1/3) * obj.cnm2 + (2/3) * obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -(2/3) * obj.nu * obj.dt);
         end
@@ -157,6 +165,8 @@ classdef DiffusionSolver < handle
             if obj.completed_steps_ < 2
                 error('kp:solvers:MissingStateHistory', 'DiffusionSolver.bdf3Step requires two prior steps in the state history.');
             end
+            % BDF3 is the highest-order fixed-step option currently
+            % mirrored here from the C++ solver family.
             rhsPhysical = (18/11) * obj.cn - (9/11) * obj.cnm1 + (2/11) * obj.cnm2 + (6/11) * obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -(6/11) * obj.nu * obj.dt);
         end
@@ -164,6 +174,8 @@ classdef DiffusionSolver < handle
 
     methods (Access = private)
         function out = takeStep(obj, rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, lapScale)
+            % Every time step solves one implicit elliptic system with the
+            % cached Laplacian and the current boundary operator.
             [neuCoeff, dirCoeff] = obj.getBoundaryCoefficients(t, NeuCoeffFunc, DirCoeffFunc);
             obj.ensureBoundaryOperator(neuCoeff, dirCoeff);
             rhsBoundary = evaluateTransientBoundaryValues(bc, neuCoeff, dirCoeff, obj.nr, t, obj.Xb);
@@ -177,6 +189,8 @@ classdef DiffusionSolver < handle
         end
 
         function [neuCoeff, dirCoeff] = getBoundaryCoefficients(obj, t, NeuCoeffFunc, DirCoeffFunc)
+            % If the coefficient callbacks are time-independent, cache the
+            % nodal coefficient vectors once.
             if isFixedBoundaryCallback(NeuCoeffFunc) && isFixedBoundaryCallback(DirCoeffFunc)
                 if ~obj.fixed_bc_coefficients_ready_
                     obj.cached_neu_coeff_ = evaluateBoundaryCoefficient(NeuCoeffFunc, obj.Xb);
@@ -193,6 +207,8 @@ classdef DiffusionSolver < handle
         end
 
         function ensureBoundaryOperator(obj, neuCoeff, dirCoeff)
+            % Likewise, a fixed boundary operator can be cached once and
+            % reused across all subsequent steps.
             if obj.fixed_bc_operator_ready_ && ~isempty(obj.BC)
                 return;
             end

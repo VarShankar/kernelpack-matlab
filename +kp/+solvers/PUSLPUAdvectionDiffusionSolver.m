@@ -34,6 +34,8 @@ classdef PUSLPUAdvectionDiffusionSolver < handle
             obj.nu = nu;
             obj.direction = lower(string(direction));
 
+            % This wrapper mirrors the FD-coupled version, but swaps in PU
+            % diffusion for the elliptic part.
             obj.advection.init(domain, xi_sl, dt);
             obj.diffusion.init(domain, xi_pu, dt, nu, num_omp_threads);
 
@@ -134,6 +136,8 @@ classdef PUSLPUAdvectionDiffusionSolver < handle
 
         function next_state = bdf1Step(obj, t_next, velocity, rk, forcing, NeuCoeffFunc, DirCoeffFunc, bc)
             assert(~isempty(obj.state_nm2), 'PUSLPUAdvectionDiffusionSolver::bdf1Step requires setInitialState first.');
+            % Transport first, then diffuse the transported state with the
+            % corresponding PU diffusion step.
             transported_nm2 = transportState(obj, t_next - obj.dt, obj.state_nm2, 1, velocity, rk);
             obj.diffusion.setStateHistory(transported_nm2);
             next_state = obj.diffusion.bdf1Step(t_next, forcing, NeuCoeffFunc, DirCoeffFunc, bc);
@@ -201,6 +205,8 @@ classdef PUSLPUAdvectionDiffusionSolver < handle
 end
 
 function transported = transportState(obj, t_start, state, num_steps, velocity, rk)
+% Reuse the PU-SL advection solver over a longer time horizon when older
+% BDF states need to be transported to the current step.
 original_dt = obj.dt;
 horizon = num_steps * obj.dt;
 obj.advection.setStepSize(horizon);

@@ -47,6 +47,9 @@ classdef PUDiffusionSolver < handle
                     'PUDiffusionSolver expects one ghost node per boundary node.');
             end
 
+            % The PU diffusion solver builds one reusable patch covering
+            % and then localizes both the Laplacian and BC operators on
+            % that same covering.
             obj.patch_data = kp.solvers.puPatchGeometry(obj.Domain, obj.xi);
             obj.Lap = kp.solvers.puLocalizedOperator(obj.Domain, obj.patch_data, obj.xi, obj.X, 'lap');
             obj.BC = zeros(0, obj.Nf);
@@ -76,6 +79,8 @@ classdef PUDiffusionSolver < handle
         end
 
         function setStateHistory(obj, varargin)
+            % Accept one, two, or three physical states so callers can
+            % start directly at BDF1, BDF2, or BDF3.
             switch numel(varargin)
                 case 1
                     obj.setInitialState(varargin{1});
@@ -123,6 +128,8 @@ classdef PUDiffusionSolver < handle
                 error('kp:solvers:MissingInitialState', 'PUDiffusionSolver.bdf1Step requires setInitialState() first.');
             end
             previous = obj.currentPhysicalState();
+            % BDF1 is just backward Euler written in the same localized
+            % operator language as the higher-order steps.
             rhsPhysical = previous + obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -obj.nu * obj.dt);
         end
@@ -131,6 +138,8 @@ classdef PUDiffusionSolver < handle
             if obj.completed_steps_ < 1
                 error('kp:solvers:MissingStateHistory', 'PUDiffusionSolver.bdf2Step requires one prior step in the state history.');
             end
+            % BDF2 keeps the same solve shape, only changing the history
+            % coefficients on the right-hand side.
             rhsPhysical = (4/3) * obj.cnm1 - (1/3) * obj.cnm2 + (2/3) * obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -(2/3) * obj.nu * obj.dt);
         end
@@ -139,6 +148,8 @@ classdef PUDiffusionSolver < handle
             if obj.completed_steps_ < 2
                 error('kp:solvers:MissingStateHistory', 'PUDiffusionSolver.bdf3Step requires two prior steps in the state history.');
             end
+            % BDF3 is the highest-order fixed-step option currently
+            % mirrored for the PU diffusion path.
             rhsPhysical = (18/11) * obj.cn - (9/11) * obj.cnm1 + (2/11) * obj.cnm2 + (6/11) * obj.dt * evaluateForcingCallback(forcing, obj.nu, t, obj.X);
             out = obj.takeStep(rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, -(6/11) * obj.nu * obj.dt);
         end
@@ -146,6 +157,8 @@ classdef PUDiffusionSolver < handle
 
     methods (Access = private)
         function out = takeStep(obj, rhsPhysical, t, NeuCoeffFunc, DirCoeffFunc, bc, lapScale)
+            % Every time step solves one implicit elliptic system with the
+            % cached PU Laplacian and the current PU boundary operator.
             [neuCoeff, dirCoeff] = obj.getBoundaryCoefficients(t, NeuCoeffFunc, DirCoeffFunc);
             obj.ensureBoundaryOperator(neuCoeff, dirCoeff);
             rhsBoundary = evaluateTransientBoundaryValues(bc, neuCoeff, dirCoeff, obj.nr, t, obj.Xb);
@@ -172,6 +185,8 @@ classdef PUDiffusionSolver < handle
         end
 
         function ensureBoundaryOperator(obj, neuCoeff, dirCoeff)
+            % Like the FD diffusion solver, keep the boundary operator
+            % cached once the BC coefficients stop changing in time.
             if obj.fixed_bc_operator_ready_ && ~isempty(obj.BC)
                 return;
             end

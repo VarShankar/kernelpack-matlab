@@ -37,6 +37,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
             obj.segment_map = zeros(0, 1);
             obj.corner_flags = zeros(0, 1);
 
+            % Each segment or patch gets its own EmbeddedSurface model
+            % first; the global piecewise object is assembled afterward.
             dim = size(bdry_segments{1}, 2);
             if ~isscalar(radius)
                 radius = min(radius(:));
@@ -56,6 +58,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
             end
             obj.segments = localSegments;
 
+            % Concatenate the per-segment sample clouds into the global
+            % piecewise boundary representation.
             counts = zeros(numel(obj.segments), 1);
             uniformCounts = zeros(numel(obj.segments), 1);
             for k = 1:numel(obj.segments)
@@ -103,6 +107,9 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
                 rowu0 = rowu0 + mu;
             end
 
+            % First remove corner duplicates in the same spirit as the C++
+            % code, then enforce a true global minimum spacing so distinct
+            % corner-adjacent samples do not survive too close together.
             [obj.Xb, obj.Nrmls, obj.segment_map, obj.corner_flags] = ...
                 obj.deduplicateBoundary(Xb_s, Nrmls_s, obj.segment_map, obj.corner_flags, 0.2 * radius);
             [obj.Xb, obj.Nrmls, obj.segment_map, obj.corner_flags] = ...
@@ -119,6 +126,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
             obj.Nrmls_smoothed = obj.Nrmls_raw;
             obj.Nrmls_uniform_smoothed = obj.Nrmls_uniform_raw;
             if smooth_normals && smooth_neighborhood > 0
+                % Optional normal smoothing is kept as a postprocess so the
+                % raw normals remain available for inspection.
                 obj.Nrmls_smoothed = obj.smoothNormals(obj.Xb, obj.Nrmls_raw, smooth_neighborhood);
                 obj.Nrmls_uniform_smoothed = obj.smoothNormals(obj.Xb_uniform, obj.Nrmls_uniform_raw, smooth_neighborhood);
                 obj.Nrmls = obj.Nrmls_smoothed;
@@ -138,6 +147,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
         end
 
         function buildLevelSet(obj)
+            % The piecewise level set is built from the assembled uniform
+            % boundary cloud rather than from the per-segment data sites.
             obj.levelSet = kp.geometry.RBFLevelSet();
             obj.levelSet.BuildLevelSetFromCFI(obj.Xb_uniform, obj.Nrmls_uniform);
         end
@@ -220,6 +231,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
                 if visited(i)
                     continue;
                 end
+                % Merge a duplicate cluster into one representative point,
+                % while aligning normals before averaging them.
                 cluster = find(D(i, :) <= tol);
                 visited(cluster) = true;
                 outCount = outCount + 1;
@@ -266,6 +279,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
                 return;
             end
 
+            % After duplicate cleanup, do a conservative spacing pass on
+            % the assembled cloud. Corner-tagged points get priority.
             D = kp.geometry.distanceMatrix(X, X);
             keep = true(n, 1);
             cornerMask = cornerFlags(:) ~= 0;
@@ -299,6 +314,8 @@ classdef PiecewiseSmoothEmbeddedSurface < handle
         end
 
         function NrmlsOut = smoothNormals(~, X, NrmlsIn, neighborhood)
+            % Smooth by averaging a small nearest-neighbor normal cloud,
+            % flipping signs first so opposite orientations do not cancel.
             n = size(X, 1);
             NrmlsOut = NrmlsIn;
             if n == 0 || neighborhood <= 1

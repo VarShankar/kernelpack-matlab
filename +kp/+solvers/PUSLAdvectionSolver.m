@@ -79,6 +79,8 @@ classdef PUSLAdvectionSolver < handle
             obj.output_range = [1, size(obj.output_nodes, 1)];
 
             h = obj.Domain.getSepRad();
+            % The PU-SL solver is driven by a patch covering of the
+            % physical node cloud rather than by one global interpolant.
             obj.patch_spacing = choosePatchSpacing(h, patch_spacing_factor);
             obj.patch_radius = choosePatchRadius(h, patch_radius_factor);
             obj.min_patch_nodes = chooseMinimumPatchNodes(size(obj.output_nodes, 2), xi);
@@ -92,6 +94,8 @@ classdef PUSLAdvectionSolver < handle
         end
 
         function coeffs = projectInitial(obj, rho0)
+            % The coefficient vector is just the nodal field sampled at the
+            % output nodes in this MATLAB mirror.
             X = obj.output_nodes;
             coeffs = zeros(size(X, 1), 1);
             for i = 1:size(X, 1)
@@ -115,10 +119,14 @@ classdef PUSLAdvectionSolver < handle
         end
 
         function values = evaluateAtPoints(obj, coeffs, X)
+            % Evaluation at arbitrary points is done by localized PU
+            % reconstruction over the patch covering.
             values = localizedEvaluate(obj, coeffs, X);
         end
 
         function coeffs_next = backwardSLStep(obj, tn, coeffs_old, velocity, rk)
+            % Backward SL: trace departure points, evaluate there, then
+            % write the transported values back at the Eulerian nodes.
             X = obj.output_nodes;
             Xdep = tracePointsBackward(X, tn, obj.dt, velocity, rk);
             values = localizedEvaluate(obj, coeffs_old, Xdep);
@@ -127,6 +135,8 @@ classdef PUSLAdvectionSolver < handle
         end
 
         function coeffs_next = forwardSLStep(obj, tn, coeffs_old, velocity, rk)
+            % Forward SL is kept for parity with KernelPack, though the
+            % current verification work has focused on the backward path.
             X = obj.output_nodes;
             Xarr = tracePointsForward(X, tn, obj.dt, velocity, rk);
             coeffs_arr = coeffs_old;
@@ -211,6 +221,8 @@ end
 end
 
 function patch_node_ids = buildPatchNodeIds(domain, centers, radius, min_patch_nodes)
+% Make each PU patch robust by forcing a minimum node count, falling back
+% to KNN if the geometric ball query is too sparse.
 patch_node_ids = cell(size(centers, 1), 1);
 for p = 1:size(centers, 1)
     ids = domain.queryBall("interior_boundary", centers(p, :), radius);
@@ -247,6 +259,8 @@ sp.ell = max(obj.xi + 1, 2);
 sp.npoly = size(kp.poly.total_degree_indices(dim, sp.ell), 1);
 sp.spline_degree = max(5, 2 * floor((sp.ell + 1) / 2) - 1);
 
+% Evaluate every active patch contribution and blend them with compact
+% Wendland weights.
 for p = 1:size(obj.patch_centers, 1)
     center = obj.patch_centers(p, :);
     diff = Xq - center;
@@ -267,6 +281,8 @@ for p = 1:size(obj.patch_centers, 1)
     weight_sum(mask) = weight_sum(mask) + wloc;
 end
 
+% If no patch contributes, fall back to the nearest nodal value so the
+% routine stays total over the query set.
 missing = weight_sum <= 1.0e-14;
 if any(missing)
     [idx, ~] = obj.Domain.queryKnn("interior_boundary", Xq(missing, :), 1);
@@ -313,7 +329,7 @@ K4 = velocity(t + dt, X4);
 Xnext = X + (dt / 6) * (K1 + 2 * K2 + 2 * K3 + K4);
 end
 
-function values = applyBoundaryCondition(obj, values, Xdep, tnext, velocity)
+function values = applyBoundaryCondition(obj, values, Xdep, tnext, ~)
 bc = obj.boundary_condition;
 if bc.mode == "unspecified" || bc.mode == "tangential"
     return;

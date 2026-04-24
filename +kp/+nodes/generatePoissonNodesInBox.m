@@ -12,6 +12,8 @@ function [X, info] = generatePoissonNodesInBox(radiusOrFunc, x_min, x_max, varar
 %     'BoundaryRefinementFraction', frac
 %     'BoundaryDistance', dist
 
+    % Parse once up front so every strip sees the same deterministic
+    % sampling rules and refinement settings.
     opts = parseInputs(radiusOrFunc, x_min, x_max, varargin{:});
 
     if any(opts.x_max <= opts.x_min)
@@ -20,6 +22,9 @@ function [X, info] = generatePoissonNodesInBox(radiusOrFunc, x_min, x_max, varar
         return;
     end
 
+    % KernelPack's current deterministic path collapses to one canonical
+    % strip, while nondeterministic runs may split across strips for
+    % parallel speed.
     stripBoxes = buildStripBoxes(opts.x_min, opts.x_max, opts.split_tol, opts.strip_count);
     localClouds = cell(opts.strip_count, 1);
     stripSeeds = uint32(mod(double(opts.base_seed) + 104729 * (0:opts.strip_count-1), 2^32 - 1));
@@ -36,6 +41,8 @@ function [X, info] = generatePoissonNodesInBox(radiusOrFunc, x_min, x_max, varar
         end
     end
 
+    % Concatenate the strip clouds in canonical order, then clip them back
+    % to the requested axis-aligned box.
     X = flattenStripClouds(localClouds, opts.x_min, opts.x_max);
     info = struct( ...
         'dimension', numel(opts.x_min), ...
@@ -106,6 +113,8 @@ function opts = parseInputs(radiusOrFunc, x_min, x_max, varargin)
     opts.has_boundary_refinement = ~isempty(opts.boundary_points) && size(opts.boundary_points, 1) > 0 && ...
         opts.boundary_refinement_fraction < 1 && opts.boundary_distance > 0;
 
+    % Normalize both the fixed-radius and variable-density interfaces into
+    % one internal option struct that the sampler uses everywhere.
     if isa(radiusOrFunc, 'function_handle')
         if isempty(opts.MinRadius)
             error('kp:nodes:MissingMinRadius', ...
@@ -180,6 +189,8 @@ function tf = canUseParfor()
 end
 
 function stripBoxes = buildStripBoxes(x_min, x_max, split_tol, stripCount)
+    % The box is split only along the first coordinate, following the
+    % strip-decomposition shape used in the C++ node generator.
     dim0 = (x_max(1) - x_min(1)) / stripCount;
     stripBoxes = cell(stripCount, 1);
     for k = 1:stripCount
@@ -209,6 +220,8 @@ function X = poissonStripSample(sample_min, sample_max, opts, seed)
     x0 = sample_min + rand(stream, 1, dim) .* (sample_max - sample_min);
     [points, active, grid, nPoints, nActive] = addPoint(points, active, grid, x0, sample_min, cellSize, 0, 0);
 
+    % This is Bridson-style active-list sampling, but with the active
+    % radius allowed to vary from point to point.
     while nActive > 0
         pick = randi(stream, nActive);
         activeIdx = active(pick);
@@ -237,6 +250,8 @@ function X = poissonStripSample(sample_min, sample_max, opts, seed)
 end
 
 function radius = localRadius(point, opts)
+    % The active radius may come from a fixed h, a user-supplied radius
+    % function, or the near-boundary refinement rule.
     switch opts.mode
         case 'fixed_radius'
             radius = opts.radius;
@@ -294,6 +309,8 @@ function tf = hasConflictingNeighbor(point, activeIdx, points, nPoints, grid, x_
             error('kp:nodes:UnknownMode', 'Unknown Poisson sampling mode.');
     end
 
+    % The search radius is conservative enough to catch any neighbor that
+    % could violate the active-radius acceptance rule.
     idx = pointToCell(point, x_min, cellSize);
     reach = max(1, ceil(radiusForReach / cellSize));
     ranges = cell(1, numel(idx));
