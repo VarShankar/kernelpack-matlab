@@ -24,6 +24,9 @@ out.radius = radius;
 out.spacing = spacing;
 out.min_patch_nodes = min_nodes;
 out.node_ids = node_ids;
+out.center_tree = buildCenterTree(centers);
+out.stencil_props = buildStencilProperties(size(Xf, 2), xi);
+out.stencils = buildPatchStencils(Xf, node_ids, out.stencil_props);
 end
 
 function spacing = choosePatchSpacing(h, patch_spacing_factor)
@@ -78,4 +81,35 @@ function min_nodes = chooseMinimumPatchNodes(dim, xi)
 ell = max(xi + 1, 2);
 npoly = size(kp.poly.total_degree_indices(dim, ell), 1);
 min_nodes = 2 * npoly + 1;
+end
+
+function sp = buildStencilProperties(dim, xi)
+sp = kp.rbffd.StencilProperties();
+sp.dim = dim;
+sp.ell = max(xi + 1, 2);
+sp.npoly = size(kp.poly.total_degree_indices(dim, sp.ell), 1);
+sp.spline_degree = max(5, sp.ell);
+if mod(sp.spline_degree, 2) == 0
+    sp.spline_degree = sp.spline_degree - 1;
+end
+end
+
+function stencils = buildPatchStencils(Xf, node_ids, sp)
+stencils = cell(size(node_ids));
+for p = 1:numel(node_ids)
+    stencil = kp.rbffd.RBFStencil();
+    stencil.InitializeGeometry(Xf(node_ids{p}, :), sp);
+    stencils{p} = stencil;
+end
+end
+
+function tree = buildCenterTree(centers)
+tree = struct('Points', centers, 'Searcher', [], 'HasSearcher', false);
+if isempty(centers)
+    return;
+end
+if exist('KDTreeSearcher', 'class') == 8 && exist('rangesearch', 'file') == 2
+    tree.Searcher = KDTreeSearcher(centers);
+    tree.HasSearcher = true;
+end
 end

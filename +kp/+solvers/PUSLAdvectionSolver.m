@@ -12,6 +12,9 @@ classdef PUSLAdvectionSolver < handle
         patch_spacing (1,1) double = 0
         min_patch_nodes (1,1) double = 0
         patch_node_ids cell = {}
+        patch_center_tree struct = struct('Points', [], 'Searcher', [], 'HasSearcher', false)
+        patch_stencil_props kp.rbffd.StencilProperties = kp.rbffd.StencilProperties()
+        patch_stencils cell = {}
         domain_measure (1,1) double = 0
         boundary_condition struct = struct('mode', "unspecified", 'normal_velocity_tolerance', 1.0e-10, 'periodic_patches', [], 'inflow_value', [])
     end
@@ -86,6 +89,9 @@ classdef PUSLAdvectionSolver < handle
             obj.min_patch_nodes = chooseMinimumPatchNodes(size(obj.output_nodes, 2), xi);
             obj.patch_centers = choosePatchCenters(obj.output_nodes, obj.patch_spacing);
             obj.patch_node_ids = buildPatchNodeIds(obj.Domain, obj.patch_centers, obj.patch_radius, obj.min_patch_nodes);
+            obj.patch_center_tree = buildCenterTree(obj.patch_centers);
+            obj.patch_stencil_props = buildPatchStencilProperties(size(obj.output_nodes, 2), obj.xi);
+            obj.patch_stencils = buildPatchStencils(obj.output_nodes, obj.patch_node_ids, obj.patch_stencil_props);
             obj.domain_measure = estimateDomainMeasure(obj.Domain);
         end
 
@@ -240,45 +246,71 @@ npoly = size(kp.poly.total_degree_indices(dim, ell), 1);
 min_nodes = 2 * npoly + 1;
 end
 
+function tree = buildCenterTree(centers)
+tree = struct('Points', centers, 'Searcher', [], 'HasSearcher', false);
+if isempty(centers)
+    return;
+end
+if exist('KDTreeSearcher', 'class') == 8 && exist('rangesearch', 'file') == 2
+    tree.Searcher = KDTreeSearcher(centers);
+    tree.HasSearcher = true;
+end
+end
+
+function sp = buildPatchStencilProperties(dim, xi)
+sp = kp.rbffd.StencilProperties();
+sp.dim = dim;
+sp.ell = max(xi + 1, 2);
+sp.npoly = size(kp.poly.total_degree_indices(dim, sp.ell), 1);
+sp.spline_degree = max(5, 2 * floor((sp.ell + 1) / 2) - 1);
+end
+
+function stencils = buildPatchStencils(Xnodes, node_ids, sp)
+stencils = cell(size(node_ids));
+for p = 1:numel(node_ids)
+    stencil = kp.rbffd.RBFStencil();
+    stencil.InitializeGeometry(Xnodes(node_ids{p}, :), sp);
+    stencils{p} = stencil;
+end
+end
+
 function values = localizedEvaluate(obj, coeffs, Xq)
 if isempty(Xq)
     values = zeros(0, size(coeffs, 2));
     return;
 end
 
-Xnodes = obj.output_nodes;
-dim = size(Xnodes, 2);
 nq = size(Xq, 1);
 nc = size(coeffs, 2);
 values = zeros(nq, nc);
 weight_sum = zeros(nq, 1);
-
-sp = kp.rbffd.StencilProperties();
-sp.dim = dim;
-sp.ell = max(obj.xi + 1, 2);
-sp.npoly = size(kp.poly.total_degree_indices(dim, sp.ell), 1);
-sp.spline_degree = max(5, 2 * floor((sp.ell + 1) / 2) - 1);
+sp = obj.patch_stencil_props;
+patch_ids_per_query = queryPatchIds(obj.patch_center_tree, obj.patch_centers, Xq, obj.patch_radius);
 
 % Evaluate every active patch contribution and blend them with compact
 % Wendland weights.
-for p = 1:size(obj.patch_centers, 1)
-    center = obj.patch_centers(p, :);
-    diff = Xq - center;
-    dist = sqrt(sum(diff.^2, 2));
-    mask = dist < obj.patch_radius;
-    if ~any(mask)
+for q = 1:size(Xq, 1)
+    patch_ids = patch_ids_per_query{q};
+    if isempty(patch_ids)
         continue;
     end
-    ids = obj.patch_node_ids{p};
-    Xloc = Xnodes(ids, :);
-    floc = coeffs(ids, :);
-    stencil = kp.rbffd.RBFStencil();
-    stencil.InitializeGeometry(Xloc, sp);
-    qloc = Xq(mask, :);
-    vloc = stencil.EvalStencil(sp, qloc, floc, false);
-    wloc = wendlandC6(dist(mask) ./ obj.patch_radius);
-    values(mask, :) = values(mask, :) + wloc .* vloc;
-    weight_sum(mask) = weight_sum(mask) + wloc;
+    center_dist = sqrt(sum((obj.patch_centers(patch_ids, :) - Xq(q, :)).^2, 2));
+    alpha = wendlandC6(center_dist ./ obj.patch_radius);
+    alpha_sum = sum(alpha);
+    if alpha_sum <= 1.0e-14
+        alpha = ones(size(alpha));
+        alpha_sum = sum(alpha);
+    end
+    alpha = alpha / alpha_sum;
+    for k = 1:numel(patch_ids)
+        p = patch_ids(k);
+        ids = obj.patch_node_ids{p};
+        floc = coeffs(ids, :);
+        stencil = obj.patch_stencils{p};
+        vloc = stencil.EvalStencil(sp, Xq(q, :), floc, false);
+        values(q, :) = values(q, :) + alpha(k) * vloc;
+    end
+    weight_sum(q) = 1.0;
 end
 
 % If no patch contributes, fall back to the nearest nodal value so the
@@ -291,6 +323,31 @@ if any(missing)
 end
 
 values = values ./ weight_sum;
+end
+
+function patch_ids_per_query = queryPatchIds(tree, centers, Xq, radius)
+if tree.HasSearcher
+    patch_ids_per_query = rangesearch(tree.Searcher, Xq, radius);
+else
+    D = kp.geometry.distanceMatrix(Xq, centers);
+    patch_ids_per_query = cell(size(Xq, 1), 1);
+    for q = 1:size(Xq, 1)
+        patch_ids_per_query{q} = find(D(q, :) < radius);
+    end
+end
+
+for q = 1:numel(patch_ids_per_query)
+    if isempty(patch_ids_per_query{q})
+        if isempty(centers)
+            continue;
+        end
+        d = sqrt(sum((centers - Xq(q, :)).^2, 2));
+        [~, nearest_patch] = min(d);
+        patch_ids_per_query{q} = nearest_patch;
+    else
+        patch_ids_per_query{q} = patch_ids_per_query{q}(:).';
+    end
+end
 end
 
 function w = wendlandC6(r)

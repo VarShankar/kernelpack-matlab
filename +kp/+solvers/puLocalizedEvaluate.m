@@ -1,4 +1,4 @@
-function values = puLocalizedEvaluate(domain, patchData, xi, coeffs, Xq)
+function values = puLocalizedEvaluate(domain, patchData, ~, coeffs, Xq)
 %PULOCALIZEDEVALUATE Partition-of-unity evaluation on arbitrary query points.
 
 if isempty(Xq)
@@ -6,38 +6,37 @@ if isempty(Xq)
     return;
 end
 
-Xnodes = domain.getAllNodes();
 radius = patchData.radius;
 centers = patchData.centers;
 node_ids = patchData.node_ids;
-dim = size(Xnodes, 2);
 nc = size(coeffs, 2);
-
-sp = kp.rbffd.StencilProperties();
-sp.dim = dim;
-sp.ell = max(xi + 1, 2);
-sp.npoly = size(kp.poly.total_degree_indices(dim, sp.ell), 1);
-sp.spline_degree = max(5, sp.ell);
-if mod(sp.spline_degree, 2) == 0
-    sp.spline_degree = sp.spline_degree - 1;
-end
+stencils = patchData.stencils;
+sp = patchData.stencil_props;
+patch_ids_per_query = queryPatchIds(patchData, Xq, radius);
 
 values = zeros(size(Xq, 1), nc);
 weight_sum = zeros(size(Xq, 1), 1);
-for p = 1:size(centers, 1)
-    center = centers(p, :);
-    dist = sqrt(sum((Xq - center).^2, 2));
-    mask = dist < radius;
-    if ~any(mask)
+for q = 1:size(Xq, 1)
+    patch_ids = patch_ids_per_query{q};
+    if isempty(patch_ids)
         continue;
     end
-    ids = node_ids{p};
-    stencil = kp.rbffd.RBFStencil();
-    stencil.InitializeGeometry(Xnodes(ids, :), sp);
-    wloc = puPatchWeight(dist(mask) ./ radius);
-    vloc = stencil.EvalStencil(sp, Xq(mask, :), coeffs(ids, :), false);
-    values(mask, :) = values(mask, :) + wloc .* vloc;
-    weight_sum(mask) = weight_sum(mask) + wloc;
+    center_dist = sqrt(sum((centers(patch_ids, :) - Xq(q, :)).^2, 2));
+    alpha = puPatchWeight(center_dist ./ radius);
+    alpha_sum = sum(alpha);
+    if alpha_sum <= 1.0e-14
+        alpha = ones(size(alpha));
+        alpha_sum = sum(alpha);
+    end
+    alpha = alpha / alpha_sum;
+    for k = 1:numel(patch_ids)
+        p = patch_ids(k);
+        ids = node_ids{p};
+        stencil = stencils{p};
+        vloc = stencil.EvalStencil(sp, Xq(q, :), coeffs(ids, :), false);
+        values(q, :) = values(q, :) + alpha(k) * vloc;
+    end
+    weight_sum(q) = 1.0;
 end
 
 missing = weight_sum <= 1.0e-14;
@@ -48,6 +47,33 @@ values(missing, :) = coeffs(idx(:, 1), :);
 end
 
 values = values ./ weight_sum;
+end
+
+function patch_ids_per_query = queryPatchIds(patchData, Xq, radius)
+tree = patchData.center_tree;
+centers = patchData.centers;
+if tree.HasSearcher
+    patch_ids_per_query = rangesearch(tree.Searcher, Xq, radius);
+else
+    D = kp.geometry.distanceMatrix(Xq, centers);
+    patch_ids_per_query = cell(size(Xq, 1), 1);
+    for q = 1:size(Xq, 1)
+        patch_ids_per_query{q} = find(D(q, :) < radius);
+    end
+end
+
+for q = 1:numel(patch_ids_per_query)
+    if isempty(patch_ids_per_query{q})
+        if isempty(centers)
+            continue;
+        end
+        d = sqrt(sum((centers - Xq(q, :)).^2, 2));
+        [~, nearest_patch] = min(d);
+        patch_ids_per_query{q} = nearest_patch;
+    else
+        patch_ids_per_query{q} = patch_ids_per_query{q}(:).';
+    end
+end
 end
 
 function w = puPatchWeight(r)
