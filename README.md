@@ -29,8 +29,8 @@ The primary packages are `kp.geometry`, `kp.nodes`, `kp.domain`, `kp.poly`,
 ## Requirements
 
 - MATLAB R2022b or newer
-- Statistics and Machine Learning Toolbox for KD-tree acceleration in the
-  large surface workflows
+- Statistics and Machine Learning Toolbox for the KD-tree searches used by
+  divergence-free interpolation and surface workflows
 - Parallel Computing Toolbox is optional; supported assembly routines fall
   back to serial execution when it is unavailable
 - `export_fig` is optional and used only for publication-style figure export
