@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use kernelpack-matlab, please cite this software and the relevant numerical-method paper."
+title: "kernelpack-matlab"
+type: software
+authors:
+  - family-names: Shankar
+    given-names: Varun
+repository-code: "https://github.com/VarShankar/kernelpack-matlab"
+url: "https://github.com/VarShankar/kernelpack-matlab"
+license: BSD-3-Clause
+version: 0.1.0
+date-released: 2026-09-08

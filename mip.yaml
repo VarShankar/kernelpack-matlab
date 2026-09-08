@@ -1,0 +1,14 @@
+name: kernelpack_matlab
+description: "MATLAB geometry, node generation, RBF-FD, PU, and surface PDE toolkit"
+version: "0.1.0"
+license: "BSD-3-Clause"
+homepage: "https://github.com/VarShankar/kernelpack-matlab"
+repository: "https://github.com/VarShankar/kernelpack-matlab"
+dependencies: []
+test_script: tests/mip_package_checks.m
+
+addpaths:
+  - path: "."
+
+builds:
+  - architectures: [any]

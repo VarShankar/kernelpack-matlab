@@ -1,0 +1,179 @@
+// A wall-bounded 3D microchannel that is periodic in the streamwise and
+// spanwise directions. The initial profile and constant body force are an
+// exact planar Poiseuille pair before the membrane is inserted.
+MU = 2.0e-2
+RHO = 1.0
+BODY_FORCE = 4.0e-2
+
+NX = 128
+NY = 32
+NZ = 32
+MAX_LEVELS = 3
+REF_RATIO = 2
+DX_FINE = 1.0/(REF_RATIO*NY)
+DT = 1.0e-3
+START_TIME = 0.0
+END_TIME = 2.0
+
+RBC_SUBDIVISIONS = 4
+RBC_RADIUS = 0.18
+RBC_CENTER_X = 0.75
+RBC_CENTER_Y = 0.35
+RBC_CENTER_Z = 0.50
+RBC_SHEAR_MODULUS = 0.5
+RBC_BENDING_MODULUS = 2.5e-4
+RBC_AREA_MODULUS = 5.0
+RBC_VOLUME_MODULUS = 20.0
+
+TRAJECTORY_DIRECTORY = "trajectory"
+TRAJECTORY_DUMP_INTERVAL = 5
+
+IBHierarchyIntegrator {
+   start_time = START_TIME
+   end_time = END_TIME
+   dt_max = DT
+   grow_dt = 1.0
+   regrid_cfl_interval = 0.5
+   error_on_dt_change = FALSE
+   enable_logging = FALSE
+   time_stepping_type = "MIDPOINT_RULE"
+}
+
+IBFESurfaceMethod {
+   IB_delta_fcn = "IB_4"
+   use_consistent_mass_matrix = TRUE
+   IB_point_density = 2.0
+   min_ghost_cell_width = 0
+}
+
+INSStaggeredHierarchyIntegrator {
+   mu = MU
+   rho = RHO
+   start_time = START_TIME
+   end_time = END_TIME
+   grow_dt = 1.0
+   convective_time_stepping_type = "ADAMS_BASHFORTH"
+   convective_op_type = "PPM"
+   convective_difference_form = "ADVECTIVE"
+   normalize_pressure = TRUE
+   cfl = 0.25
+   dt_max = DT
+   using_vorticity_tagging = FALSE
+   tag_buffer = 2
+   output_U = TRUE
+   output_P = TRUE
+   output_F = TRUE
+   output_Omega = TRUE
+   output_Div_U = TRUE
+   enable_logging = FALSE
+}
+
+VelocityInitialConditions {
+   function_0 = "0.04*X_1*(1.0-X_1)/(2.0*0.02)"
+   function_1 = "0.0"
+   function_2 = "0.0"
+}
+
+ForcingFunction {
+   function_0 = "0.04"
+   function_1 = "0.0"
+   function_2 = "0.0"
+}
+
+// Faces 2 and 3 are the lower and upper y walls. The x and z faces are
+// periodic and their coefficients are ignored by the hierarchy integrator.
+VelocityBcCoefs_0 {
+   acoef_function_0 = "0.0"
+   acoef_function_1 = "0.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "0.0"
+   acoef_function_5 = "0.0"
+   bcoef_function_0 = "1.0"
+   bcoef_function_1 = "1.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "1.0"
+   bcoef_function_5 = "1.0"
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
+
+VelocityBcCoefs_1 {
+   acoef_function_0 = "0.0"
+   acoef_function_1 = "0.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "0.0"
+   acoef_function_5 = "0.0"
+   bcoef_function_0 = "1.0"
+   bcoef_function_1 = "1.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "1.0"
+   bcoef_function_5 = "1.0"
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
+
+VelocityBcCoefs_2 {
+   acoef_function_0 = "0.0"
+   acoef_function_1 = "0.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "0.0"
+   acoef_function_5 = "0.0"
+   bcoef_function_0 = "1.0"
+   bcoef_function_1 = "1.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "1.0"
+   bcoef_function_5 = "1.0"
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
+
+CartesianGeometry {
+   domain_boxes = [ (0,0,0),(NX - 1,NY - 1,NZ - 1) ]
+   x_lo = 0.0,0.0,0.0
+   x_up = 4.0,1.0,1.0
+   periodic_dimension = 1,0,1
+}
+
+GriddingAlgorithm {
+   max_levels = MAX_LEVELS
+   ratio_to_coarser { level_1 = REF_RATIO,REF_RATIO,REF_RATIO }
+   largest_patch_size { level_0 = 64,32,32 }
+   smallest_patch_size { level_0 = 8,8,8 }
+   efficiency_tolerance = 0.80
+   combine_efficiency = 0.80
+}
+
+StandardTagAndInitialize { tagging_method = "GRADIENT_DETECTOR" }
+LoadBalancer { bin_pack_method = "SPATIAL" }
+
+Main {
+   log_file_name = "rbc3d.log"
+   log_all_nodes = FALSE
+   viz_writer = "VisIt"
+   viz_dump_interval = 100
+   viz_dump_dirname = "viz_rbc3d"
+   visit_number_procs_per_file = 1
+   restart_dump_interval = 0
+   restart_dump_dirname = "restart_rbc3d"
+   data_dump_interval = 0
+   data_dump_dirname = "hier_data_rbc3d"
+   timer_dump_interval = 0
+}

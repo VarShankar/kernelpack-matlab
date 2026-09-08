@@ -1,0 +1,9 @@
+*.asv
+*.m~
+*.mlx
+*.fig
+*.mat
+moving_surface_adr_tp_rbc_capstone.csv
+data/ibamr_rbc_3d/trajectory/
+/.matlab_temp/
+/docs/_validation.*
