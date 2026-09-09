@@ -17,6 +17,8 @@ The moving-surface implementation accompanies the preprint
 [*A high-order, meshless, Lagrangian--Eulerian RBF-FD method for
 advection--diffusion--reaction on moving manifolds*](https://arxiv.org/abs/2608.19384)
 by Matthew Lowery, Grady B. Wright, and Varun Shankar.
+The library also implements methods developed in the earlier papers listed in
+[Research foundations](#research-foundations).
 
 ![Chemical transport on a fluid-driven biconcave membrane](docs/figures/moving_surface_adr_tp_rbc_capstone_transport.png)
 
@@ -29,7 +31,8 @@ and is mass-corrected using quadrature from the evolving geometric model.
 
 [Install](#installation) | [First solve](#first-solve) |
 [Moving surfaces](#moving-surface-pdes) | [Examples](#examples) |
-[Tests](#verification) | [Citation](#citation)
+[Tests](#verification) | [Papers](#research-foundations) |
+[Citation](#citation)
 
 ## Who this is for
 
@@ -223,6 +226,22 @@ moving_surface_rbc_capstone_checks;
 ```
 
 The same public suite runs in GitHub Actions on every push and pull request.
+
+## Research foundations
+
+`kernelpack-matlab` brings together methods developed across several papers.
+Please cite the papers corresponding to the parts of the library used in your
+work.
+
+| Code or method | Publication |
+| --- | --- |
+| Surface RBF-FD foundations | V. Shankar, G. B. Wright, R. M. Kirby, and A. L. Fogelson, [*A radial basis function (RBF)-finite difference (FD) method for diffusion and reaction-diffusion equations on surfaces*](https://doi.org/10.1007/s10915-014-9914-1), Journal of Scientific Computing 63 (2015), 745--768 |
+| Overlapped RBF-FD assembly (`kp.rbffd.FDODiffOp`) | V. Shankar, [*The overlapped radial basis function-finite difference (RBF-FD) method: A generalization of RBF-FD*](https://doi.org/10.1016/j.jcp.2017.04.037), Journal of Computational Physics 342 (2017), 211--228 |
+| SBF geometric models and Poisson node generation (`kp.geometry`, `kp.nodes`) | V. Shankar, R. M. Kirby, and A. L. Fogelson, [*Robust node generation for mesh-free discretizations on irregular domains and surfaces*](https://doi.org/10.1137/17M114090X), SIAM Journal on Scientific Computing 40 (2018), A2584--A2608 |
+| Bulk-domain hyperviscosity and PHS-degree selection | V. Shankar and A. L. Fogelson, [*Hyperviscosity-based stabilization for radial basis function-finite difference (RBF-FD) discretizations of advection-diffusion equations*](https://doi.org/10.1016/j.jcp.2018.06.036), Journal of Computational Physics 372 (2018), 616--639 |
+| Hyperviscosity for surface transport (`kp.manifold.hyperviscosityCoefficient`) | V. Shankar, G. B. Wright, and A. Narayan, [*A robust hyperviscosity formulation for stable RBF-FD discretizations of advection-diffusion-reaction equations on manifolds*](https://doi.org/10.1137/19M1288747), SIAM Journal on Scientific Computing 42 (2020), A2371--A2401 |
+| Moving-domain node and differentiation-matrix updates | V. Shankar, G. B. Wright, and A. L. Fogelson, [*An efficient high-order meshless method for advection-diffusion equations on time-varying irregular domains*](https://doi.org/10.1016/j.jcp.2021.110633), Journal of Computational Physics 445 (2021), 110633 |
+| Lagrangian--Eulerian ADR on moving surfaces | M. Lowery, G. B. Wright, and V. Shankar, [*A high-order, meshless, Lagrangian--Eulerian RBF-FD method for advection-diffusion-reaction on moving manifolds*](https://doi.org/10.48550/arXiv.2608.19384), arXiv:2608.19384 (2026) |
 
 ## Citation
 
