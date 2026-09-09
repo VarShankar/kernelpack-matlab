@@ -13,11 +13,41 @@ scattered-node discretizations, and PDE solvers on fixed domains and surfaces.
 The public release includes both reusable package classes and the research
 drivers used for prescribed moving-surface ADR studies.
 
+The moving-surface implementation accompanies the preprint
+[*A high-order, meshless, Lagrangian--Eulerian RBF-FD method for
+advection--diffusion--reaction on moving manifolds*](https://arxiv.org/abs/2608.19384)
+by Matthew Lowery, Grady B. Wright, and Varun Shankar.
+
 ![Chemical transport on a fluid-driven biconcave membrane](docs/figures/moving_surface_adr_tp_rbc_capstone_transport.png)
+
+The figure shows a passive chemical tracer on a deforming red-blood-cell
+membrane. A three-dimensional IBAMR fluid-structure interaction simulation
+supplies the membrane positions and velocities; `kernelpack-matlab` advances
+the source-free surface advection-diffusion equation on that moving point
+cloud. The tracer moves with the no-slip membrane, diffuses along the surface,
+and is mass-corrected using quadrature from the evolving geometric model.
 
 [Install](#installation) | [First solve](#first-solve) |
 [Moving surfaces](#moving-surface-pdes) | [Examples](#examples) |
 [Tests](#verification) | [Citation](#citation)
+
+## Who this is for
+
+This package is intended for numerical PDE researchers and MATLAB users who
+want to:
+
+- prototype PHS+poly RBF-FD or weighted-least-squares discretizations;
+- generate scattered nodes and differential operators on embedded domains;
+- solve elliptic and diffusion problems without constructing a volume mesh;
+- study advection-diffusion-reaction equations on stationary or evolving
+  surfaces; or
+- reproduce and extend the moving-surface numerical experiments included in
+  the repository.
+
+It is a research codebase, not a general-purpose finite-element package or a
+fluid-structure interaction solver. The included IBAMR application generates
+trajectory data for the red-blood-cell example; the surface PDE is then solved
+in MATLAB.
 
 ## At a glance
 
@@ -155,9 +185,15 @@ are:
 | Study marker rearrangement and history backfill | [`moving_surface_adr_tp_spheroid_rearrangement_study.m`](examples/moving_surface_adr_tp_spheroid_rearrangement_study.m) |
 | Reproduce the biconcave-membrane transport case | [`moving_surface_adr_tp_rbc_capstone.m`](examples/moving_surface_adr_tp_rbc_capstone.m) |
 
-## Membrane capstone data
+## Fluid-driven red-blood-cell example
 
-The IBAMR trajectory and saved MATLAB capstone result are distributed in the
+This example tests passive transport on a strongly deforming, biconcave
+membrane driven by a three-dimensional immersed-boundary simulation. The
+MATLAB solve uses the prescribed IBAMR trajectory, SBF geometry and normals,
+tangent-plane RBF-FD operators, hyperviscosity, mass correction, and marker
+rearrangement when the moving point cloud loses quality.
+
+The trajectory and saved MATLAB result are distributed in the
 [`data-v1` release](https://github.com/VarShankar/kernelpack-matlab/releases/tag/data-v1)
 rather than in the installable source package. Download and verify the archive
 from MATLAB:
@@ -190,10 +226,14 @@ The same public suite runs in GitHub Actions on every push and pull request.
 
 ## Citation
 
-Citation metadata are provided in [`CITATION.cff`](CITATION.cff). If you use
-the moving-surface solver in published work, please also cite the associated
-numerical-method paper; its final bibliographic record will be added after
-publication.
+Citation metadata for the software are provided in
+[`CITATION.cff`](CITATION.cff). If you use the moving-surface method, please
+also cite:
+
+> Matthew Lowery, Grady B. Wright, and Varun Shankar. "A high-order,
+> meshless, Lagrangian--Eulerian RBF-FD method for
+> advection--diffusion--reaction on moving manifolds." arXiv:2608.19384,
+> 2026. [doi:10.48550/arXiv.2608.19384](https://doi.org/10.48550/arXiv.2608.19384)
 
 ## Contributing
 
